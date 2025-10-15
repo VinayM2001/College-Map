@@ -1,120 +1,115 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>3D Map with Real-World Orientation & Hotspots</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>3D Map with Smart Orientation</title>
+<script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.4.0/model-viewer.min.js"></script>
+<style>
+  body, html { margin:0; padding:0; height:100%; }
+  model-viewer { width:100%; height:100vh; background:#f5f5f5; }
 
-  <!-- Import the <model-viewer> library -->
-  <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.4.0/model-viewer.min.js"></script>
+  /* Hotspot styling */
+  .hotspot {
+    background: rgba(255,255,255,0.9);
+    border-radius:8px;
+    border:1px solid #ccc;
+    padding:4px 8px;
+    font-size:12px;
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    gap:6px;
+  }
 
-  <style>
-    /* Make the model fill the full screen */
-    model-viewer {
-      width: 100vw;
-      height: 100%;
-      background-color: #f5f5f5;
-    }
+  .hotspot img { width:16px; height:16px; }
 
-    /* Base style for hotspot buttons */
-    .hotspot {
-      background: none;
-      border: none;
-      cursor: pointer;
-      position: relative;
-    }
-
-    /* Hotspot image styling */
-    .hotspot img {
-      width: 60px;
-      height: 60px;
-      border-radius: 50%;
-      border: 2px solid white;
-      box-shadow: 0 0 10px rgba(0, 0, 0, 0.4);
-      transition: transform 0.2s ease;
-    }
-
-    /* Slight zoom effect when hovering */
-    .hotspot img:hover {
-      transform: scale(1.1);
-    }
-
-    /* Optional label under hotspot */
-    .label {
-      position: absolute;
-      top: 70px;
-      left: 50%;
-      transform: translateX(-50%);
-      color: white;
-      font-size: 14px;
-      background: rgba(0, 0, 0, 0.6);
-      padding: 4px 8px;
-      border-radius: 6px;
-    }
-  </style>
+  /* Recenter button */
+  #recenterBtn {
+    position:absolute; bottom:20px; right:20px;
+    padding:8px 14px; background:#222; color:white; border:none;
+    border-radius:6px; cursor:pointer; opacity:0.8;
+  }
+  #recenterBtn:hover { opacity:1; }
+</style>
 </head>
-
 <body>
-  <!-- ===============================
-       MAIN 3D MODEL VIEWER
-       =============================== -->
-  <model-viewer
-    id="mapModel"
-    src="G_floor_Final.glb"
-    alt="3D Interactive Map"
-    camera-controls
-    interaction-prompt="none"
-    shadow-intensity="0.8"
-    exposure="1.2"
-    ar
-    touch-action="pan-y"
-    orbit-sensitivity="2"
-    min-camera-orbit="auto 0deg auto"
-    max-camera-orbit="auto 90deg auto"
-    field-of-view="45deg"
-  >
-  </model-viewer>
 
-  <!-- ===============================
-       COMPASS ALIGNMENT SCRIPT
-       =============================== -->
-  <script>
-    const modelViewer = document.getElementById('mapModel');
+<model-viewer
+  id="mapModel"
+  src="G_floor_Final.glb"
+  alt="3D Interactive Map"
+  camera-controls
+  auto-rotate
+  min-camera-orbit="0deg 10deg auto"    <!-- restrict bottom tilt -->
+  max-camera-orbit="360deg 90deg auto"  <!-- allow full horizontal + top view -->
+  field-of-view="50deg"
+  touch-action="pan-y"
+>
+  <!-- Hotspot -->
+  <button slot="hotspot-info" data-position="2 1 1" data-normal="0 1 0" class="hotspot"
+    onclick="window.open('https://example.com/info','_blank')">
+    <img src="info.png" alt="Info"><span>Info Desk</span>
+  </button>
+</model-viewer>
 
-    // Set this offset manually to align the model’s north with real north
-    // (Try changing this value until your model faces correctly)
-    const northOffset = 0; // degrees (0, 90, 180, 270)
+<button id="recenterBtn">Recenter</button>
 
-    // This function updates the model's rotation based on device compass
-    function handleOrientation(event) {
-      // On iOS Safari, use webkitCompassHeading (0 = north, 360 = north)
-      let heading = event.webkitCompassHeading;
+<script>
+const model = document.getElementById('mapModel');
+const recenterBtn = document.getElementById('recenterBtn');
 
-      // On Android/Chrome, use event.alpha (0° = north, clockwise)
-      if (heading === undefined) heading = 360 - event.alpha;
+// === CONFIG ===
+const northOffset = 90;  // Adjust to align model north
+const tiltAngle = 60;    // Keep top-to-front tilt static
 
-      if (heading !== null && heading !== undefined) {
-        const correctedHeading = (heading + northOffset) % 360;
-        // Adjust the camera orbit based on heading
-        modelViewer.cameraOrbit = `${correctedHeading}deg 75deg 3m`;
-      }
-    }
+// Track user interaction
+let userInteracting = false;
+let orientationActive = true;
 
-    // Request permission on iOS 13+ devices
-    if (typeof DeviceOrientationEvent.requestPermission === 'function') {
-      document.body.addEventListener('click', async () => {
-        const response = await DeviceOrientationEvent.requestPermission();
-        if (response === 'granted') {
-          window.addEventListener('deviceorientation', handleOrientation, true);
-        } else {
-          alert('Permission to access compass denied.');
-        }
-      });
-    } else {
-      // Android devices (no permission request needed)
+// Device orientation handler
+function handleOrientation(event) {
+  if (!orientationActive) return;
+
+  let heading = event.webkitCompassHeading || (360 - event.alpha);
+  if (heading !== null && heading !== undefined) {
+    const correctedHeading = (heading + northOffset) % 360;
+    // Only rotate around vertical axis (y-axis), keep tilt fixed
+    const currentOrbit = model.getCameraOrbit();
+    model.cameraOrbit = `${correctedHeading}deg ${tiltAngle}deg auto`;
+  }
+}
+
+// iOS permission for device orientation
+if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+  document.body.addEventListener('click', async () => {
+    const response = await DeviceOrientationEvent.requestPermission();
+    if (response === 'granted') {
       window.addEventListener('deviceorientation', handleOrientation, true);
+    } else {
+      alert('Compass permission denied.');
     }
-  </script>
+  });
+} else {
+  window.addEventListener('deviceorientation', handleOrientation, true);
+}
 
+// Detect user interactions
+model.addEventListener('pointerdown', () => {
+  userInteracting = true;
+  orientationActive = false; // stop device-orientation while interacting
+});
+
+model.addEventListener('pointerup', () => {
+  userInteracting = false;
+  // smooth realign after a small delay
+  setTimeout(() => { orientationActive = true; }, 500);
+});
+
+// Optional: Recenter button
+recenterBtn.addEventListener('click', () => {
+  model.cameraOrbit = `0deg ${tiltAngle}deg auto`;
+});
+</script>
 </body>
 </html>
