@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>3D Map with Real-World Orientation & Hotspots</title>
+
+  <!-- Import the <model-viewer> library -->
+  <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.4.0/model-viewer.min.js"></script>
+
+  <style>
+    /* Make the model fill the full screen */
+    model-viewer {
+      width: 100%;
+      height: 100vh;
+      background-color: #f5f5f5;
+    }
+
+    /* Base style for hotspot buttons */
+    .hotspot {
+      background: none;
+      border: none;
+      cursor: pointer;
+      position: relative;
+    }
+
+    /* Hotspot image styling */
+    .hotspot img {
+      width: 60px;
+      height: 60px;
+      border-radius: 50%;
+      border: 2px solid white;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.4);
+      transition: transform 0.2s ease;
+    }
+
+    /* Slight zoom effect when hovering */
+    .hotspot img:hover {
+      transform: scale(1.1);
+    }
+
+    /* Optional label under hotspot */
+    .label {
+      position: absolute;
+      top: 70px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: white;
+      font-size: 14px;
+      background: rgba(0, 0, 0, 0.6);
+      padding: 4px 8px;
+      border-radius: 6px;
+    }
+  </style>
+</head>
+
+<body>
+  <!-- ===============================
+       MAIN 3D MODEL VIEWER
+       =============================== -->
+  <model-viewer
+    id="mapModel"
+    src="mall_map.glb"              <!-- 🧱 Replace with your GLB file path or hosted link -->
+    alt="3D Interactive Map"
+    camera-controls                <!-- Enables orbit, zoom, pan -->
+    auto-rotate                    <!-- Makes it slowly spin until interacted with -->
+    interaction-prompt="none"
+    shadow-intensity="0.8"
+    exposure="1.2"
+    ar                             <!-- Allows AR view on supported devices -->
+  >
+
+    <!-- 📍 Example Hotspot #1 (links to an external page) -->
+    <button
+      slot="hotspot-foodcourt"
+      data-position="2 1 1"        <!-- Adjust coordinates (x y z) to match model location -->
+      data-normal="0 1 0"
+      class="hotspot"
+      onclick="window.open('https://example.com/foodcourt', '_blank')"
+    >
+      <img src="foodcourt.png" alt="Food Court Sign">
+      <div class="label">Food Court</div>
+    </button>
+
+    <!-- 📍 Example Hotspot #2 (links to another section of your site) -->
+    <button
+      slot="hotspot-exit"
+      data-position="-1 1 2"
+      data-normal="0 1 0"
+      class="hotspot"
+      onclick="window.location.href='about.html'"
+    >
+      <img src="exit.png" alt="Exit Sign">
+      <div class="label">Main Exit</div>
+    </button>
+
+  </model-viewer>
+
+  <!-- ===============================
+       COMPASS ALIGNMENT SCRIPT
+       =============================== -->
+  <script>
+    const modelViewer = document.getElementById('mapModel');
+
+    // Set this offset manually to align the model’s north with real north
+    // (Try changing this value until your model faces correctly)
+    const northOffset = 90; // degrees (0, 90, 180, 270)
+
+    // This function updates the model's rotation based on device compass
+    function handleOrientation(event) {
+      // On iOS Safari, use webkitCompassHeading (0 = north, 360 = north)
+      let heading = event.webkitCompassHeading;
+
+      // On Android/Chrome, use event.alpha (0° = north, clockwise)
+      if (heading === undefined) heading = 360 - event.alpha;
+
+      if (heading !== null && heading !== undefined) {
+        const correctedHeading = (heading + northOffset) % 360;
+        // Adjust the camera orbit based on heading
+        modelViewer.cameraOrbit = `${correctedHeading}deg 75deg 3m`;
+      }
+    }
+
+    // Request permission on iOS 13+ devices
+    if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+      document.body.addEventListener('click', async () => {
+        const response = await DeviceOrientationEvent.requestPermission();
+        if (response === 'granted') {
+          window.addEventListener('deviceorientation', handleOrientation, true);
+        } else {
+          alert('Permission to access compass denied.');
+        }
+      });
+    } else {
+      // Android devices (no permission request needed)
+      window.addEventListener('deviceorientation', handleOrientation, true);
+    }
+  </script>
+
+</body>
+</html>
