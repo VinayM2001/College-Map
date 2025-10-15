@@ -67,6 +67,13 @@
     shadow-intensity="0.8"
     exposure="1.2"
     ar                             <!-- Allows AR view on supported devices -->
+      touch-action="pan-y"
+
+    <!-- 🎯 These attributes control camera freedom -->
+    orbit-sensitivity="2"           <!-- Controls drag speed -->
+    min-camera-orbit="auto 0deg auto"   <!-- Allows view from top -->
+    max-camera-orbit="auto 90deg auto"  <!-- Allows tilt to front -->
+    field-of-view="45deg"
   >
 
     <!-- 📍 Example Hotspot #1 (links to an external page) -->
