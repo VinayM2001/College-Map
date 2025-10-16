@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no" />
-<title>Interactive 3D Map (Mobile Optimized)</title>
+<title>Interactive 3D Map – Mobile Optimized</title>
 
 <!-- model-viewer -->
 <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.4.0/model-viewer.min.js"></script>
@@ -35,11 +35,10 @@ html,body{
 model-viewer{
   width:100%;
   height:100%;
-  background:linear-gradient(180deg,#dde8f8 0%,#eef3f9 100%);
+  background:linear-gradient(180deg,#d7d2cc 0%,#eef3f9 100%);
   --poster-color: transparent;
   --progress-bar-color: #009dff;
   --progress-bar-height: 3px;
-  --poster-color: transparent;
   border:none;
   touch-action: pan-y;
   outline:none;
@@ -60,9 +59,9 @@ model-viewer{
 
 /* Buttons */
 button{
-  background:rgba(255,255,255,0.15);
-  border:1px solid rgba(255,255,255,0.2);
-  color:#fff;
+  background:rgba(79, 77, 77, 0.171);
+  border:1px solid rgba(255, 255, 255, 0.521);
+  color:#ffffff;
   border-radius:10px;
   padding:0.6rem 1rem;
   font-size:0.9rem;
@@ -73,7 +72,7 @@ button{
 }
 button.active{
   background:linear-gradient(90deg,#009dff,#66d1ff);
-  color:#04111e;
+  color:#130d00;
   border:1px solid transparent;
 }
 
@@ -96,11 +95,34 @@ button.active{
   z-index:10;
 }
 
-.controls-bottom button{
-  font-size:0.9rem;
+/* Slider (phi control) */
+#tilt-slider{
+  position:absolute;
+  bottom: 5rem;
+  left:50%;
+  transform:translateX(-50%);
+  rotate: 90deg;
+  width:90%;
+  z-index:10;
+  display:none;
+}
+#tilt-slider input{
+  width:100%;
+  appearance:none;
+  height:6px;
+  background:rgb(255, 255, 255);
+  border-radius:5px;
+  outline:none;
+}
+#tilt-slider input::-webkit-slider-thumb{
+  appearance:none;
+  width:20px;height:20px;
+  border-radius:50%;
+  background:linear-gradient(90deg,#009dff,#66d1ff);
+  border:2px solid white;
 }
 
-/* Hotspots (tapable icons) */
+/* Hotspots */
 .hotspot{
   background:none;
   border:none;
@@ -139,7 +161,7 @@ button.active{
   font-size:0.8rem;
   color:#d1d9e8;
   backdrop-filter:blur(6px);
-  border:1px solid rgba(255,255,255,0.1);
+  border:1px solid rgba(55, 55, 55, 0.1);
 }
 
 /* Responsive Scaling */
@@ -157,21 +179,20 @@ button.active{
     <model-viewer
       id="viewer"
       src="G_floor_Final.glb"
-      alt="Mall Map"
+      alt="Campus Map"
       camera-controls
       shadow-intensity="1"
       exposure="1.15"
       environment-image="neutral"
       tone-mapping="aces"
       shadow-softness="0.9"
-      disable-zoom
       touch-action="pan-y">
 
-      <!-- Lighting: adds a realistic sunlight feel -->
+      <!-- Realistic lighting -->
       <directional-light slot="hotspot-light" intensity="2" color="#fff" data-position="5 8 5"></directional-light>
       <hemisphere-light slot="hotspot-light" intensity="1" color="#ffffff" ground-color="#b0d0ff"></hemisphere-light>
 
-      <!-- Example hotspot -->
+      <!-- Example hotspots -->
       <button slot="hotspot-food" class="hotspot" data-position="1.2 0.2 0.5" data-normal="0 1 0" onclick="window.open('https://example.com/food','_blank')">
         <img src="https://via.placeholder.com/100x100.png?text=🍔" alt="Food">
         <div class="label">Food Court</div>
@@ -184,7 +205,7 @@ button.active{
 
     </model-viewer>
 
-    <!-- UI Controls -->
+    <!-- Top Controls -->
     <div class="ui-panel">
       <button id="btn-orient" class="active">Orient</button>
       <button id="btn-explore">Explore</button>
@@ -196,6 +217,12 @@ button.active{
       </div>
     </div>
 
+    <!-- Tilt (phi) slider -->
+    <div id="tilt-slider">
+      <input type="range" id="phiRange" min="20" max="90" value="60" />
+    </div>
+
+    <!-- Bottom controls -->
     <div class="controls-bottom">
       <button id="btn-recenter">Recenter</button>
       <button id="btn-info">Legend</button>
@@ -220,10 +247,14 @@ const viewer = document.getElementById('viewer');
 const btnOrient = document.getElementById('btn-orient');
 const btnExplore = document.getElementById('btn-explore');
 const floorButtons = document.querySelectorAll('.floors button');
+const tiltSlider = document.getElementById('tilt-slider');
+const phiRange = document.getElementById('phiRange');
+
 let currentMode = 'orient';
 let trackingActive = false;
 let userInteracting = false;
 let northOffset = 0;
+let phiAngle = 60;
 
 /* -----------------------------
    Floor switching
@@ -257,7 +288,7 @@ function handleOrientation(e){
   const heading = e.webkitCompassHeading || (360 - e.alpha);
   if(typeof heading === 'number'){
     const corrected = (heading + northOffset) % 360;
-    viewer.cameraOrbit = `${corrected}deg 60deg auto`;
+    viewer.cameraOrbit = `${corrected}deg ${phiAngle}deg auto`;
   }
 }
 
@@ -268,10 +299,12 @@ function setMode(mode){
   currentMode=mode;
   if(mode==='orient'){
     enableOrientation();
+    tiltSlider.style.display='block';
     btnOrient.classList.add('active');
     btnExplore.classList.remove('active');
   }else{
     disableOrientation();
+    tiltSlider.style.display='none';
     btnExplore.classList.add('active');
     btnOrient.classList.remove('active');
   }
@@ -289,7 +322,7 @@ viewer.addEventListener('pointerup',()=>{userInteracting=false;});
    Recenter & Legend
 ----------------------------- */
 document.getElementById('btn-recenter').addEventListener('click',()=>{
-  viewer.cameraOrbit="0deg 60deg auto";
+  viewer.cameraOrbit=`0deg ${phiAngle}deg auto`;
 });
 document.getElementById('btn-info').addEventListener('click',()=>{
   const l=document.getElementById('legend');
@@ -297,11 +330,22 @@ document.getElementById('btn-info').addEventListener('click',()=>{
 });
 
 /* -----------------------------
+   Tilt (phi) slider
+----------------------------- */
+phiRange.addEventListener('input',()=>{
+  phiAngle = parseInt(phiRange.value);
+  if(currentMode==='orient'){
+    const orbit = viewer.cameraOrbit.split(' ');
+    viewer.cameraOrbit = `${orbit[0]} ${phiAngle}deg ${orbit[2]}`;
+  }
+});
+
+/* -----------------------------
    Init
 ----------------------------- */
 viewer.addEventListener('load',()=>{
-  viewer.minCameraOrbit='0deg 10deg auto';
-  viewer.maxCameraOrbit='360deg 90deg auto';
+  viewer.minCameraOrbit='auto 0deg auto';
+  viewer.maxCameraOrbit='auto 90deg auto';
   viewer.cameraOrbit='0deg 60deg auto';
 });
 setMode('orient');
