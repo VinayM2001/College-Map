@@ -1,306 +1,83 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no" />
-  <title>3D Campus Map – Three.js Version</title>
-
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <title>Simple 3D Model - Three.js</title>
   <style>
-    html,body {
-      margin:0; padding:0;
-      width:100%; height:100%;
-      overflow:hidden;
-      background:linear-gradient(180deg,#06131f,#0e2030);
-      font-family:Inter,system-ui,sans-serif;
-      color:#fff;
+    html, body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden;
+      background-color: #111;
     }
-
-    canvas { display:block; width:100%; height:100%; }
-
-    /* --- UI Overlay --- */
-    .ui-panel {
-      position:absolute;
-      top:1rem;
-      left:50%;
-      transform:translateX(-50%);
-      display:flex;
-      flex-wrap:wrap;
-      gap:0.6rem;
-      justify-content:center;
-      z-index:10;
-    }
-
-    button {
-      background:rgba(255,255,255,0.15);
-      border:1px solid rgba(255,255,255,0.2);
-      color:#fff;
-      border-radius:10px;
-      padding:0.6rem 1rem;
-      font-size:0.9rem;
-      font-weight:600;
-      backdrop-filter: blur(6px);
-      cursor:pointer;
-      transition:all 0.25s ease;
-    }
-
-    button.active {
-      background:linear-gradient(90deg,#009dff,#66d1ff);
-      color:#04111e;
-      border:1px solid transparent;
-    }
-
-    .floors {
-      display:flex;
-      gap:0.4rem;
-    }
-
-    #phi-slider {
-      position:absolute;
-      bottom:4.5rem;
-      left:50%;
-      transform:translateX(-50%);
-      width:60%;
-      z-index:10;
-      display:none;
-    }
-
-    #phi-slider input {
-      width:100%;
-      appearance:none;
-      height:6px;
-      background:rgba(255,255,255,0.2);
-      border-radius:5px;
-      outline:none;
-    }
-
-    #phi-slider input::-webkit-slider-thumb {
-      appearance:none;
-      width:20px;height:20px;
-      border-radius:50%;
-      background:linear-gradient(90deg,#009dff,#66d1ff);
-      border:2px solid white;
-    }
-
-    .bottom-controls {
-      position:absolute;
-      bottom:1rem;
-      left:50%;
-      transform:translateX(-50%);
-      display:flex;
-      gap:0.8rem;
-      z-index:10;
+    canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
     }
   </style>
 </head>
 <body>
-
-  <!-- Canvas is injected by Three.js -->
-  <div class="ui-panel">
-    <button id="btn-orient" class="active">Orient</button>
-    <button id="btn-explore">Explore</button>
-    <div class="floors">
-      <button data-floor="ground" class="active">G</button>
-      <button data-floor="first">1</button>
-      <button data-floor="second">2</button>
-      <button data-floor="campus">C</button>
-    </div>
-  </div>
-
-  <div id="phi-slider">
-    <input type="range" id="phiRange" min="20" max="90" value="60" />
-  </div>
-
-  <div class="bottom-controls">
-    <button id="btn-recenter">Recenter</button>
-  </div>
-
-  <!-- Three.js + OrbitControls + GLTFLoader -->
   <script type="module">
     import * as THREE from 'https://unpkg.com/three@0.168.0/build/three.module.js';
     import { OrbitControls } from 'https://unpkg.com/three@0.168.0/examples/jsm/controls/OrbitControls.js';
     import { GLTFLoader } from 'https://unpkg.com/three@0.168.0/examples/jsm/loaders/GLTFLoader.js';
 
-    /* ----------------------------------
-       Scene, Camera, Renderer
-    ---------------------------------- */
+    // Scene
     const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(55, window.innerWidth/window.innerHeight, 0.1, 100);
-    camera.position.set(5, 5, 5);
+    scene.background = new THREE.Color(0x111111);
 
-    const renderer = new THREE.WebGLRenderer({ antialias:true });
+    // Camera
+    const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 100);
+    camera.position.set(3, 2, 3);
+
+    // Renderer
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(window.devicePixelRatio);
-    renderer.shadowMap.enabled = true;
     document.body.appendChild(renderer.domElement);
 
-    /* ----------------------------------
-       Lighting – soft sunlight feel
-    ---------------------------------- */
-    const hemiLight = new THREE.HemisphereLight(0xffffff, 0xaaaaff, 1.2);
-    scene.add(hemiLight);
-
-    const dirLight = new THREE.DirectionalLight(0xffffff, 1.8);
-    dirLight.position.set(10, 15, 10);
-    dirLight.castShadow = true;
-    dirLight.shadow.mapSize.set(2048,2048);
-    scene.add(dirLight);
-
-    /* ----------------------------------
-       Controls (Orbit)
-    ---------------------------------- */
+    // Controls
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
-    controls.maxPolarAngle = Math.PI/2; // no going under map
-    controls.target.set(0,0,0);
 
-    /* ----------------------------------
-       Loaders and Models
-    ---------------------------------- */
+    // Light
+    const light = new THREE.DirectionalLight(0xffffff, 1);
+    light.position.set(5, 10, 5);
+    scene.add(light);
+    scene.add(new THREE.AmbientLight(0xffffff, 0.3));
+
+    // Load Model
     const loader = new GLTFLoader();
-    const MODELS = {
-      ground:'G_floor_Final.glb',
-      first:'1st_floor_Final.glb',
-      second:'second_floor.glb',
-      campus:'campus_map.glb'
-    };
-    let currentModel = null;
+    loader.load(
+      'model.glb', // replace with your file name
+      (gltf) => {
+        const model = gltf.scene;
+        scene.add(model);
+      },
+      (xhr) => {
+        console.log(`Loading: ${(xhr.loaded / xhr.total * 100).toFixed(1)}%`);
+      },
+      (error) => {
+        console.error('Error loading model:', error);
+      }
+    );
 
-    function loadModel(floor){
-      const src = MODELS[floor];
-      loader.load(src, gltf => {
-        if(currentModel) scene.remove(currentModel);
-        currentModel = gltf.scene;
-        gltf.scene.traverse(obj=>{
-          if(obj.isMesh){
-            obj.castShadow = true;
-            obj.receiveShadow = true;
-          }
-        });
-        scene.add(gltf.scene);
-      });
-    }
-    loadModel('ground');
-
-    /* ----------------------------------
-       Resize
-    ---------------------------------- */
-    window.addEventListener('resize',()=>{
-      camera.aspect = window.innerWidth/window.innerHeight;
+    // Resize
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
       camera.updateProjectionMatrix();
       renderer.setSize(window.innerWidth, window.innerHeight);
     });
 
-    /* ----------------------------------
-       Mode Handling
-    ---------------------------------- */
-    const btnOrient = document.getElementById('btn-orient');
-    const btnExplore = document.getElementById('btn-explore');
-    const phiSliderBox = document.getElementById('phi-slider');
-    const phiRange = document.getElementById('phiRange');
-    let currentMode = 'orient';
-    let phiAngle = 60;
-    let tracking = false;
-    let userInteracting = false;
-
-    function setMode(mode){
-      currentMode = mode;
-      if(mode==='orient'){
-        btnOrient.classList.add('active');
-        btnExplore.classList.remove('active');
-        phiSliderBox.style.display='block';
-        enableCompass();
-      }else{
-        btnExplore.classList.add('active');
-        btnOrient.classList.remove('active');
-        phiSliderBox.style.display='none';
-        disableCompass();
-      }
-    }
-    btnOrient.onclick=()=>setMode('orient');
-    btnExplore.onclick=()=>setMode('explore');
-
-    /* ----------------------------------
-       Floors
-    ---------------------------------- */
-    document.querySelectorAll('.floors button').forEach(btn=>{
-      btn.addEventListener('click',()=>{
-        document.querySelectorAll('.floors button').forEach(b=>b.classList.remove('active'));
-        btn.classList.add('active');
-        loadModel(btn.dataset.floor);
-      });
-    });
-
-    /* ----------------------------------
-       Compass / Orientation
-    ---------------------------------- */
-    function enableCompass(){
-      if(typeof DeviceOrientationEvent!=='undefined' && DeviceOrientationEvent.requestPermission){
-        DeviceOrientationEvent.requestPermission().then(r=>{
-          if(r==='granted'){
-            window.addEventListener('deviceorientation', onCompass);
-          }
-        });
-      }else{
-        window.addEventListener('deviceorientation', onCompass);
-      }
-      tracking=true;
-    }
-
-    function disableCompass(){
-      window.removeEventListener('deviceorientation', onCompass);
-      tracking=false;
-    }
-
-    function onCompass(e){
-      if(!tracking || userInteracting) return;
-      const heading = e.webkitCompassHeading || (360 - e.alpha);
-      if(typeof heading==='number'){
-        const rad = THREE.MathUtils.degToRad(heading);
-        const distance = 6;
-        const phi = THREE.MathUtils.degToRad(phiAngle);
-        camera.position.x = Math.sin(rad)*distance;
-        camera.position.z = Math.cos(rad)*distance;
-        camera.position.y = Math.tan(phi);
-        camera.lookAt(0,0,0);
-      }
-    }
-
-    /* ----------------------------------
-       Phi Slider (tilt)
-    ---------------------------------- */
-    phiRange.addEventListener('input',()=>{
-      phiAngle = parseInt(phiRange.value);
-    });
-
-    /* ----------------------------------
-       Recenter Button
-    ---------------------------------- */
-    document.getElementById('btn-recenter').onclick=()=>{
-      controls.target.set(0,0,0);
-      controls.update();
-    };
-
-    /* ----------------------------------
-       User Interaction Lock
-    ---------------------------------- */
-    renderer.domElement.addEventListener('pointerdown',()=>userInteracting=true);
-    renderer.domElement.addEventListener('pointerup',()=>userInteracting=false);
-
-    /* ----------------------------------
-       Render Loop
-    ---------------------------------- */
-    function animate(){
+    // Animate
+    function animate() {
       requestAnimationFrame(animate);
       controls.update();
-      renderer.render(scene,camera);
+      renderer.render(scene, camera);
     }
     animate();
-
-    /* ----------------------------------
-       Init
-    ---------------------------------- */
-    setMode('orient');
   </script>
-
 </body>
 </html>
