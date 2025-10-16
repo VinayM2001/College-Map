@@ -1,354 +1,306 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no" />
-<title>Interactive 3D Map – Mobile Optimized</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no" />
+  <title>3D Campus Map – Three.js Version</title>
 
-<!-- model-viewer -->
-<script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.4.0/model-viewer.min.js"></script>
+  <style>
+    html,body {
+      margin:0; padding:0;
+      width:100%; height:100%;
+      overflow:hidden;
+      background:linear-gradient(180deg,#06131f,#0e2030);
+      font-family:Inter,system-ui,sans-serif;
+      color:#fff;
+    }
 
-<style>
-/* --- Base Styling --- */
-html,body{
-  margin:0;padding:0;
-  height:100%;
-  width:100%;
-  overflow:hidden;
-  background:linear-gradient(180deg,#06131f,#0e2030);
-  color:#f3f8ff;
-  font-family:Inter,system-ui,Arial,sans-serif;
-}
+    canvas { display:block; width:100%; height:100%; }
 
-/* --- Model Viewer Container --- */
-.viewer-wrap{
-  position:relative;
-  width:100%;
-  height:100vh;
-  overflow:hidden;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-}
+    /* --- UI Overlay --- */
+    .ui-panel {
+      position:absolute;
+      top:1rem;
+      left:50%;
+      transform:translateX(-50%);
+      display:flex;
+      flex-wrap:wrap;
+      gap:0.6rem;
+      justify-content:center;
+      z-index:10;
+    }
 
-/* --- Model Viewer --- */
-model-viewer{
-  width:100%;
-  height:100%;
-  background:linear-gradient(180deg,#d7d2cc 0%,#eef3f9 100%);
-  --poster-color: transparent;
-  --progress-bar-color: #009dff;
-  --progress-bar-height: 3px;
-  border:none;
-  touch-action: pan-y;
-  outline:none;
-}
+    button {
+      background:rgba(255,255,255,0.15);
+      border:1px solid rgba(255,255,255,0.2);
+      color:#fff;
+      border-radius:10px;
+      padding:0.6rem 1rem;
+      font-size:0.9rem;
+      font-weight:600;
+      backdrop-filter: blur(6px);
+      cursor:pointer;
+      transition:all 0.25s ease;
+    }
 
-/* --- Overlay UI --- */
-.ui-panel{
-  position:absolute;
-  top:1rem;
-  left:50%;
-  transform:translateX(-50%);
-  display:flex;
-  flex-wrap:wrap;
-  gap:0.5rem;
-  justify-content:center;
-  z-index:10;
-}
+    button.active {
+      background:linear-gradient(90deg,#009dff,#66d1ff);
+      color:#04111e;
+      border:1px solid transparent;
+    }
 
-/* Buttons */
-button{
-  background:rgba(79, 77, 77, 0.171);
-  border:1px solid rgba(255, 255, 255, 0.521);
-  color:#ffffff;
-  border-radius:10px;
-  padding:0.6rem 1rem;
-  font-size:0.9rem;
-  font-weight:600;
-  backdrop-filter: blur(6px);
-  cursor:pointer;
-  transition: all 0.25s ease;
-}
-button.active{
-  background:linear-gradient(90deg,#009dff,#66d1ff);
-  color:#130d00;
-  border:1px solid transparent;
-}
+    .floors {
+      display:flex;
+      gap:0.4rem;
+    }
 
-/* Floors */
-.floors{
-  display:flex;
-  gap:0.4rem;
-}
+    #phi-slider {
+      position:absolute;
+      bottom:4.5rem;
+      left:50%;
+      transform:translateX(-50%);
+      width:60%;
+      z-index:10;
+      display:none;
+    }
 
-/* Bottom Controls */
-.controls-bottom{
-  position:absolute;
-  bottom:1rem;
-  left:50%;
-  transform:translateX(-50%);
-  display:flex;
-  gap:0.8rem;
-  flex-wrap:wrap;
-  justify-content:center;
-  z-index:10;
-}
+    #phi-slider input {
+      width:100%;
+      appearance:none;
+      height:6px;
+      background:rgba(255,255,255,0.2);
+      border-radius:5px;
+      outline:none;
+    }
 
-/* Slider (phi control) */
-#tilt-slider{
-  position:absolute;
-  bottom: 5rem;
-  left:50%;
-  transform:translateX(-50%);
-  rotate: 90deg;
-  width:90%;
-  z-index:10;
-  display:none;
-}
-#tilt-slider input{
-  width:100%;
-  appearance:none;
-  height:6px;
-  background:rgb(255, 255, 255);
-  border-radius:5px;
-  outline:none;
-}
-#tilt-slider input::-webkit-slider-thumb{
-  appearance:none;
-  width:20px;height:20px;
-  border-radius:50%;
-  background:linear-gradient(90deg,#009dff,#66d1ff);
-  border:2px solid white;
-}
+    #phi-slider input::-webkit-slider-thumb {
+      appearance:none;
+      width:20px;height:20px;
+      border-radius:50%;
+      background:linear-gradient(90deg,#009dff,#66d1ff);
+      border:2px solid white;
+    }
 
-/* Hotspots */
-.hotspot{
-  background:none;
-  border:none;
-  cursor:pointer;
-  position:relative;
-}
-.hotspot img{
-  width:48px;height:48px;
-  border-radius:50%;
-  border:2px solid #fff;
-  box-shadow:0 4px 12px rgba(0,0,0,0.4);
-}
-.hotspot .label{
-  position:absolute;
-  bottom:-1.6rem;
-  left:50%;
-  transform:translateX(-50%);
-  background:rgba(0,0,0,0.7);
-  color:#fff;
-  font-size:0.75rem;
-  padding:0.2rem 0.5rem;
-  border-radius:6px;
-  white-space:nowrap;
-  display:none;
-}
-.hotspot:hover .label{display:block;}
-
-/* Legend */
-.legend{
-  position:absolute;
-  right:1rem;
-  bottom:4rem;
-  background:rgba(255,255,255,0.1);
-  border-radius:10px;
-  padding:0.6rem 0.8rem;
-  font-size:0.8rem;
-  color:#d1d9e8;
-  backdrop-filter:blur(6px);
-  border:1px solid rgba(55, 55, 55, 0.1);
-}
-
-/* Responsive Scaling */
-@media (min-width:600px){
-  button{font-size:1rem;padding:0.7rem 1.1rem;}
-  .hotspot img{width:56px;height:56px;}
-  .legend{font-size:0.9rem;}
-}
-</style>
+    .bottom-controls {
+      position:absolute;
+      bottom:1rem;
+      left:50%;
+      transform:translateX(-50%);
+      display:flex;
+      gap:0.8rem;
+      z-index:10;
+    }
+  </style>
 </head>
-
 <body>
-  <div class="viewer-wrap">
 
-    <model-viewer
-      id="viewer"
-      src="G_floor_Final.glb"
-      alt="Campus Map"
-      camera-controls
-      shadow-intensity="1"
-      exposure="1.15"
-      environment-image="neutral"
-      tone-mapping="aces"
-      shadow-softness="0.9"
-      touch-action="pan-y">
-
-      <!-- Realistic lighting -->
-      <directional-light slot="hotspot-light" intensity="2" color="#fff" data-position="5 8 5"></directional-light>
-      <hemisphere-light slot="hotspot-light" intensity="1" color="#ffffff" ground-color="#b0d0ff"></hemisphere-light>
-
-      <!-- Example hotspots -->
-      <button slot="hotspot-food" class="hotspot" data-position="1.2 0.2 0.5" data-normal="0 1 0" onclick="window.open('https://example.com/food','_blank')">
-        <img src="https://via.placeholder.com/100x100.png?text=🍔" alt="Food">
-        <div class="label">Food Court</div>
-      </button>
-
-      <button slot="hotspot-shop" class="hotspot" data-position="-1.0 0.2 -0.8" data-normal="0 1 0" onclick="window.open('https://example.com/shop','_blank')">
-        <img src="https://via.placeholder.com/100x100.png?text=🛍️" alt="Shop">
-        <div class="label">Shop A</div>
-      </button>
-
-    </model-viewer>
-
-    <!-- Top Controls -->
-    <div class="ui-panel">
-      <button id="btn-orient" class="active">Orient</button>
-      <button id="btn-explore">Explore</button>
-      <div class="floors">
-        <button data-floor="ground" class="active">G</button>
-        <button data-floor="first">1</button>
-        <button data-floor="second">2</button>
-        <button data-floor="campus">C</button>
-      </div>
+  <!-- Canvas is injected by Three.js -->
+  <div class="ui-panel">
+    <button id="btn-orient" class="active">Orient</button>
+    <button id="btn-explore">Explore</button>
+    <div class="floors">
+      <button data-floor="ground" class="active">G</button>
+      <button data-floor="first">1</button>
+      <button data-floor="second">2</button>
+      <button data-floor="campus">C</button>
     </div>
-
-    <!-- Tilt (phi) slider -->
-    <div id="tilt-slider">
-      <input type="range" id="phiRange" min="20" max="90" value="60" />
-    </div>
-
-    <!-- Bottom controls -->
-    <div class="controls-bottom">
-      <button id="btn-recenter">Recenter</button>
-      <button id="btn-info">Legend</button>
-    </div>
-
-    <div class="legend" id="legend">Tap icons for more info</div>
-
   </div>
 
-<script>
-/* -----------------------------
-   Configuration
------------------------------ */
-const MODEL_SOURCES = {
-  ground: 'G_floor_Final.glb',
-  first: '1st_floor_Final.glb',
-  second: 'second_floor.glb',
-  campus: 'campus_map.glb'
-};
+  <div id="phi-slider">
+    <input type="range" id="phiRange" min="20" max="90" value="60" />
+  </div>
 
-const viewer = document.getElementById('viewer');
-const btnOrient = document.getElementById('btn-orient');
-const btnExplore = document.getElementById('btn-explore');
-const floorButtons = document.querySelectorAll('.floors button');
-const tiltSlider = document.getElementById('tilt-slider');
-const phiRange = document.getElementById('phiRange');
+  <div class="bottom-controls">
+    <button id="btn-recenter">Recenter</button>
+  </div>
 
-let currentMode = 'orient';
-let trackingActive = false;
-let userInteracting = false;
-let northOffset = 0;
-let phiAngle = 60;
+  <!-- Three.js + OrbitControls + GLTFLoader -->
+  <script type="module">
+    import * as THREE from 'https://unpkg.com/three@0.168.0/build/three.module.js';
+    import { OrbitControls } from 'https://unpkg.com/three@0.168.0/examples/jsm/controls/OrbitControls.js';
+    import { GLTFLoader } from 'https://unpkg.com/three@0.168.0/examples/jsm/loaders/GLTFLoader.js';
 
-/* -----------------------------
-   Floor switching
------------------------------ */
-function setFloor(floor){
-  if(!MODEL_SOURCES[floor]) return;
-  floorButtons.forEach(b=>b.classList.toggle('active', b.dataset.floor===floor));
-  viewer.src = MODEL_SOURCES[floor];
-}
-floorButtons.forEach(b=>b.addEventListener('click',()=>setFloor(b.dataset.floor)));
+    /* ----------------------------------
+       Scene, Camera, Renderer
+    ---------------------------------- */
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(55, window.innerWidth/window.innerHeight, 0.1, 100);
+    camera.position.set(5, 5, 5);
 
-/* -----------------------------
-   Device orientation for Orient mode
------------------------------ */
-function enableOrientation(){
-  if(typeof DeviceOrientationEvent !== 'undefined' && DeviceOrientationEvent.requestPermission){
-    DeviceOrientationEvent.requestPermission().then(r=>{
-      if(r==='granted') window.addEventListener('deviceorientation', handleOrientation, true);
+    const renderer = new THREE.WebGLRenderer({ antialias:true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.shadowMap.enabled = true;
+    document.body.appendChild(renderer.domElement);
+
+    /* ----------------------------------
+       Lighting – soft sunlight feel
+    ---------------------------------- */
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0xaaaaff, 1.2);
+    scene.add(hemiLight);
+
+    const dirLight = new THREE.DirectionalLight(0xffffff, 1.8);
+    dirLight.position.set(10, 15, 10);
+    dirLight.castShadow = true;
+    dirLight.shadow.mapSize.set(2048,2048);
+    scene.add(dirLight);
+
+    /* ----------------------------------
+       Controls (Orbit)
+    ---------------------------------- */
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.maxPolarAngle = Math.PI/2; // no going under map
+    controls.target.set(0,0,0);
+
+    /* ----------------------------------
+       Loaders and Models
+    ---------------------------------- */
+    const loader = new GLTFLoader();
+    const MODELS = {
+      ground:'ground_floor.glb',
+      first:'first_floor.glb',
+      second:'second_floor.glb',
+      campus:'campus_map.glb'
+    };
+    let currentModel = null;
+
+    function loadModel(floor){
+      const src = MODELS[floor];
+      loader.load(src, gltf => {
+        if(currentModel) scene.remove(currentModel);
+        currentModel = gltf.scene;
+        gltf.scene.traverse(obj=>{
+          if(obj.isMesh){
+            obj.castShadow = true;
+            obj.receiveShadow = true;
+          }
+        });
+        scene.add(gltf.scene);
+      });
+    }
+    loadModel('ground');
+
+    /* ----------------------------------
+       Resize
+    ---------------------------------- */
+    window.addEventListener('resize',()=>{
+      camera.aspect = window.innerWidth/window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
     });
-  }else{
-    window.addEventListener('deviceorientation', handleOrientation, true);
-  }
-  trackingActive=true;
-}
-function disableOrientation(){
-  window.removeEventListener('deviceorientation', handleOrientation, true);
-  trackingActive=false;
-}
-function handleOrientation(e){
-  if(!trackingActive || userInteracting) return;
-  const heading = e.webkitCompassHeading || (360 - e.alpha);
-  if(typeof heading === 'number'){
-    const corrected = (heading + northOffset) % 360;
-    viewer.cameraOrbit = `${corrected}deg ${phiAngle}deg auto`;
-  }
-}
 
-/* -----------------------------
-   Mode toggle
------------------------------ */
-function setMode(mode){
-  currentMode=mode;
-  if(mode==='orient'){
-    enableOrientation();
-    tiltSlider.style.display='block';
-    btnOrient.classList.add('active');
-    btnExplore.classList.remove('active');
-  }else{
-    disableOrientation();
-    tiltSlider.style.display='none';
-    btnExplore.classList.add('active');
-    btnOrient.classList.remove('active');
-  }
-}
-btnOrient.addEventListener('click',()=>setMode('orient'));
-btnExplore.addEventListener('click',()=>setMode('explore'));
+    /* ----------------------------------
+       Mode Handling
+    ---------------------------------- */
+    const btnOrient = document.getElementById('btn-orient');
+    const btnExplore = document.getElementById('btn-explore');
+    const phiSliderBox = document.getElementById('phi-slider');
+    const phiRange = document.getElementById('phiRange');
+    let currentMode = 'orient';
+    let phiAngle = 60;
+    let tracking = false;
+    let userInteracting = false;
 
-/* -----------------------------
-   Interaction handling
------------------------------ */
-viewer.addEventListener('pointerdown',()=>{userInteracting=true;});
-viewer.addEventListener('pointerup',()=>{userInteracting=false;});
+    function setMode(mode){
+      currentMode = mode;
+      if(mode==='orient'){
+        btnOrient.classList.add('active');
+        btnExplore.classList.remove('active');
+        phiSliderBox.style.display='block';
+        enableCompass();
+      }else{
+        btnExplore.classList.add('active');
+        btnOrient.classList.remove('active');
+        phiSliderBox.style.display='none';
+        disableCompass();
+      }
+    }
+    btnOrient.onclick=()=>setMode('orient');
+    btnExplore.onclick=()=>setMode('explore');
 
-/* -----------------------------
-   Recenter & Legend
------------------------------ */
-document.getElementById('btn-recenter').addEventListener('click',()=>{
-  viewer.cameraOrbit=`0deg ${phiAngle}deg auto`;
-});
-document.getElementById('btn-info').addEventListener('click',()=>{
-  const l=document.getElementById('legend');
-  l.style.display=l.style.display==='none'?'block':'none';
-});
+    /* ----------------------------------
+       Floors
+    ---------------------------------- */
+    document.querySelectorAll('.floors button').forEach(btn=>{
+      btn.addEventListener('click',()=>{
+        document.querySelectorAll('.floors button').forEach(b=>b.classList.remove('active'));
+        btn.classList.add('active');
+        loadModel(btn.dataset.floor);
+      });
+    });
 
-/* -----------------------------
-   Tilt (phi) slider
------------------------------ */
-phiRange.addEventListener('input',()=>{
-  phiAngle = parseInt(phiRange.value);
-  if(currentMode==='orient'){
-    const orbit = viewer.cameraOrbit.split(' ');
-    viewer.cameraOrbit = `${orbit[0]} ${phiAngle}deg ${orbit[2]}`;
-  }
-});
+    /* ----------------------------------
+       Compass / Orientation
+    ---------------------------------- */
+    function enableCompass(){
+      if(typeof DeviceOrientationEvent!=='undefined' && DeviceOrientationEvent.requestPermission){
+        DeviceOrientationEvent.requestPermission().then(r=>{
+          if(r==='granted'){
+            window.addEventListener('deviceorientation', onCompass);
+          }
+        });
+      }else{
+        window.addEventListener('deviceorientation', onCompass);
+      }
+      tracking=true;
+    }
 
-/* -----------------------------
-   Init
------------------------------ */
-viewer.addEventListener('load',()=>{
-  viewer.minCameraOrbit='auto 0deg auto';
-  viewer.maxCameraOrbit='auto 90deg auto';
-  viewer.cameraOrbit='0deg 60deg auto';
-});
-setMode('orient');
-</script>
+    function disableCompass(){
+      window.removeEventListener('deviceorientation', onCompass);
+      tracking=false;
+    }
+
+    function onCompass(e){
+      if(!tracking || userInteracting) return;
+      const heading = e.webkitCompassHeading || (360 - e.alpha);
+      if(typeof heading==='number'){
+        const rad = THREE.MathUtils.degToRad(heading);
+        const distance = 6;
+        const phi = THREE.MathUtils.degToRad(phiAngle);
+        camera.position.x = Math.sin(rad)*distance;
+        camera.position.z = Math.cos(rad)*distance;
+        camera.position.y = Math.tan(phi);
+        camera.lookAt(0,0,0);
+      }
+    }
+
+    /* ----------------------------------
+       Phi Slider (tilt)
+    ---------------------------------- */
+    phiRange.addEventListener('input',()=>{
+      phiAngle = parseInt(phiRange.value);
+    });
+
+    /* ----------------------------------
+       Recenter Button
+    ---------------------------------- */
+    document.getElementById('btn-recenter').onclick=()=>{
+      controls.target.set(0,0,0);
+      controls.update();
+    };
+
+    /* ----------------------------------
+       User Interaction Lock
+    ---------------------------------- */
+    renderer.domElement.addEventListener('pointerdown',()=>userInteracting=true);
+    renderer.domElement.addEventListener('pointerup',()=>userInteracting=false);
+
+    /* ----------------------------------
+       Render Loop
+    ---------------------------------- */
+    function animate(){
+      requestAnimationFrame(animate);
+      controls.update();
+      renderer.render(scene,camera);
+    }
+    animate();
+
+    /* ----------------------------------
+       Init
+    ---------------------------------- */
+    setMode('orient');
+  </script>
+
 </body>
 </html>
