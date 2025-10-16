@@ -40,8 +40,8 @@
   src="1st_floor_Final.glb"
   alt="3D Interactive Map"
   camera-controls
-  min-camera-orbit="0deg 10deg auto"
-  max-camera-orbit="360deg 90deg auto" 
+  min-camera-orbit="auto 0deg auto"
+  max-camera-orbit="auto 90deg auto" 
   touch-action="pan-y"
   field-of-view="50deg"
 >
@@ -60,11 +60,12 @@ const recenterBtn = document.getElementById('recenterBtn');
 
 // === CONFIG ===
 const northOffset = 0;  // Adjust to align model north
-const tiltControl = document.getElementById('tiltControl');
-tiltControl.addEventListener('input', e => {
-  const tilt = e.target.value;
-  model.cameraOrbit = `0deg ${tilt}deg auto`;
-});
+const minTilt = 30;
+const maxTilt = 90;
+
+// Pick a random tilt each time the model reorients
+const tiltAngle = Math.random() * (maxTilt - minTilt) + minTilt;
+model.cameraOrbit = `${correctedHeading}deg ${tiltAngle}deg auto`;
 
 // Track user interaction
 let userInteracting = false;
