@@ -1,114 +1,441 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>3D Map with Smart Orientation</title>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Interactive 3D Map — Orient & Explore</title>
+
+<!-- model-viewer -->
 <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.4.0/model-viewer.min.js"></script>
+
 <style>
-  body, html { margin:0; padding:0; height:100%; }
-  model-viewer { width:100%; height:100vh; background:#f5f5f5; }
+  /* ---------- Page layout & aesthetic ---------- */
+  :root{
+    --bg:#0f1720;
+    --panel:#0b1220;
+    --muted:#98a0b3;
+    --accent:#46a3ff;
+    --glass: rgba(255,255,255,0.04);
+    --radius:12px;
+    --ui-gap:12px;
+  }
+  *{box-sizing:border-box;font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial}
+  html,body{height:100%;margin:0;background:linear-gradient(180deg,#071022 0%, #0f1720 100%);color:#e6eef8}
+  .stage{height:100vh;display:grid;grid-template-columns:1fr;align-items:center;justify-items:center;padding:28px}
 
-  /* Hotspot styling */
-  .hotspot {
-    background: rgba(255,255,255,0.9);
-    border-radius:8px;
-    border:1px solid #ccc;
-    padding:4px 8px;
-    font-size:12px;
-    cursor:pointer;
+  /* ---------- Viewer container (center) ---------- */
+  .viewer-wrap{
+    width:1100px;
+    max-width:calc(100vw - 56px);
+    height:720px;
+    max-height:calc(100vh - 56px);
+    border-radius:var(--radius);
+    overflow:hidden;
+    background:linear-gradient(180deg,#eaf2ff 0%, #f8fbff 100%);
+    box-shadow:0 12px 40px rgba(2,6,23,0.6), inset 0 1px 0 rgba(255,255,255,0.04);
+    position:relative;
+    display:block;
+  }
+
+  /* ---------- model-viewer fills container ---------- */
+  model-viewer{
+    width:100%;
+    height:100%;
+    display:block;
+    background:transparent;
+    /* subtle border radius mask */
+  }
+
+  /* ---------- UI overlay (top-right) ---------- */
+  .ui-panel{
+    position:absolute;
+    top:18px;
+    right:18px;
     display:flex;
+    gap:var(--ui-gap);
     align-items:center;
+    z-index:30;
+  }
+
+  /* Toggle / button styles */
+  .segmented{
+    display:flex;
     gap:6px;
+    background:var(--glass);
+    border-radius:10px;
+    padding:6px;
+    box-shadow:0 6px 18px rgba(5,10,20,0.5);
+  }
+  .segmented button{
+    background:transparent;color:var(--muted);border:0;padding:8px 12px;border-radius:8px;cursor:pointer;font-weight:600;
+  }
+  .segmented button.active{color:var(--bg);background:linear-gradient(180deg,#e6f4ff,#cfeaff);}
+
+  .floors{
+    display:flex;gap:8px;
+    background:var(--glass);
+    padding:8px;border-radius:10px;
+    box-shadow:0 6px 18px rgba(5,10,20,0.45);
+  }
+  .floors button{
+    background:transparent;color:var(--muted);border:0;padding:8px 10px;border-radius:8px;cursor:pointer;font-weight:700;
+  }
+  .floors button.active{background:linear-gradient(90deg,var(--accent),#8bd1ff);color:#041426;box-shadow:0 6px 20px rgba(70,163,255,0.16);}
+
+  /* ---------- Bottom-left controls (recenter + legend) ---------- */
+  .controls-bottom{
+    position:absolute;left:18px;bottom:18px;display:flex;gap:12px;align-items:center;z-index:25;
+  }
+  .btn{
+    background:linear-gradient(180deg,#0b1b2f,#072033);border:1px solid rgba(255,255,255,0.04);color:#dfeeff;padding:10px 14px;border-radius:10px;font-weight:700;cursor:pointer;
+    box-shadow:0 8px 22px rgba(3,7,18,0.6);
+  }
+  .btn.ghost{background:transparent;border:1px solid rgba(255,255,255,0.06);color:var(--muted);font-weight:600}
+
+  /* ---------- Hotspot styling (image + label) ---------- */
+  .hotspot {
+    background:none;border:0;padding:0;cursor:pointer;position:relative;
+  }
+  .hotspot img {
+    width:58px;height:58px;border-radius:12px;border:2px solid #fff;box-shadow:0 6px 18px rgba(5,10,20,0.45);display:block;
+    background:linear-gradient(180deg,#ffffff,#f0f5ff);
+  }
+  .hotspot .label {
+    position:absolute;left:50%;top:68px;transform:translateX(-50%);background:rgba(2,6,23,0.9);color:#fff;padding:6px 10px;border-radius:8px;font-size:13px;white-space:nowrap;
+    box-shadow:0 6px 18px rgba(3,7,18,0.6);display:none;
+  }
+  .hotspot:hover .label{display:block}
+
+  /* ---------- small legend (right-middle) ---------- */
+  .legend {
+    position:absolute;right:18px;top:120px;background:linear-gradient(180deg,#ffffff08,#ffffff02);backdrop-filter: blur(6px);
+    padding:10px;border-radius:10px;color:var(--muted);font-size:13px;border:1px solid rgba(255,255,255,0.03)
   }
 
-  .hotspot img { width:16px; height:16px; }
-
-  /* Recenter button */
-  #recenterBtn {
-    position:absolute; bottom:20px; right:20px;
-    padding:8px 14px; background:#222; color:white; border:none;
-    border-radius:6px; cursor:pointer; opacity:0.8;
+  /* responsive */
+  @media (max-width:880px){
+    .viewer-wrap{height:62vh}
+    .hotspot img{width:44px;height:44px}
   }
-  #recenterBtn:hover { opacity:1; }
 </style>
 </head>
 <body>
+  <div class="stage">
+    <div class="viewer-wrap">
 
-<model-viewer
-  id="mapModel"
-  src="1st_floor_Final.glb"
-  alt="3D Interactive Map"
-  camera-controls
-  min-camera-orbit="auto 0deg auto"
-  max-camera-orbit="auto 90deg auto" 
-  touch-action="pan-y"
-  field-of-view="50deg"
->
-  <!-- Hotspot -->
-  <button slot="hotspot-info" data-position="2 1 1" data-normal="0 1 0" class="hotspot"
-    onclick="window.open('https://example.com/info','_blank')">
-    <img src="info.png" alt="Info"><span>Info Desk</span>
-  </button>
-</model-viewer>
+      <!-- model-viewer: fills the viewer wrap -->
+      <model-viewer id="viewer"
+        src=""              
+        alt="Floor map"
+        camera-controls
+        interaction-prompt="none"
+        touch-action="pan-y"
+        shadow-intensity="0.9"
+        exposure="1.1"
+        >
+        <!-- EXAMPLE hotspots. Position (x y z) must be tuned for your model geometry -->
+        <button slot="hotspot-shopA" class="hotspot" data-position="1.2 0.05 -0.8" data-normal="0 1 0"
+                onclick="window.open('https://example.com/shopA','_blank')">
+          <img src="https://via.placeholder.com/120x120.png?text=A" alt="Shop A">
+          <div class="label">Shop A</div>
+        </button>
 
-<button id="recenterBtn">Recenter</button>
+        <button slot="hotspot-food" class="hotspot" data-position="-0.8 0.05 1.5" data-normal="0 1 0"
+                onclick="window.open('https://example.com/food','_blank')">
+          <img src="https://via.placeholder.com/120x120.png?text=Food" alt="Food Court">
+          <div class="label">Food Court</div>
+        </button>
+
+      </model-viewer>
+
+      <!-- UI: Mode toggle and Floor selector -->
+      <div class="ui-panel">
+        <div class="segmented" role="tablist" aria-label="Mode">
+          <button id="btn-orient" class="active" title="Orient: model aligns to real north">Orient</button>
+          <button id="btn-explore" title="Explore: free manual exploration">Explore</button>
+        </div>
+
+        <div class="floors" aria-label="Floors">
+          <button data-floor="ground" class="active">Ground</button>
+          <button data-floor="first">1st</button>
+          <button data-floor="second">2nd</button>
+          <button data-floor="campus">Campus</button>
+        </div>
+      </div>
+
+      <!-- Bottom controls -->
+      <div class="controls-bottom">
+        <button id="btn-recenter" class="btn">Recenter</button>
+        <button id="btn-info" class="btn ghost">Legend</button>
+      </div>
+
+      <!-- small legend -->
+      <div class="legend" id="legend">Hotspots: tap icons to open more info</div>
+    </div>
+  </div>
 
 <script>
-const model = document.getElementById('mapModel');
-const recenterBtn = document.getElementById('recenterBtn');
+/* ==========================
+   CONFIG: Supply your GLB URLs
+   ========================== */
+const MODEL_SOURCES = {
+  ground: 'G_floor_Final.glb',   // <-- replace with your hosted paths
+  first:  '1st_floor_Final.glb',
+  second: 'second_floor.glb',
+  campus: 'campus_map.glb'
+};
 
-// === CONFIG ===
-const northOffset = 0;  // Adjust to align model north
+/* Tune initial camera params */
+const DEFAULT_PHI = 60;          // default tilt (phi) in degrees (top/front)
+const MIN_PHI = 10;              // prevent looking underneath (10° above horizon)
+const MAX_PHI = 90;              // top view
+const DEFAULT_RADIUS = '3m';     // distance from model (can use 'auto' for exporter-fit)
 
+/* North offset: adjust until model 'north' lines up with real north (0 = no change) */
+let northOffset = 0; // degrees — change to 90/180/270 if your model's north differs
 
-// Track user interaction
-let userInteracting = false;
-let orientationActive = true;
+/* ======= State ======= */
+const viewer = document.getElementById('viewer');
+let currentMode = 'orient';      // 'orient' or 'explore'
+let trackingActive = false;      // device orientation tracking active
+let userInteracting = false;     // user is touching/dragging
+let targetTheta = 0;             // where we want the camera theta to smoothly move (deg)
+let targetPhi = DEFAULT_PHI;     // dynamic phi controlled by user & maintained
+let animating = false;
 
-// Device orientation handler
-function handleOrientation(event) {
-  if (!orientationActive) return;
+/* Utility: parse cameraOrbit string like "45deg 60deg 3m" -> {theta,phi,radius} */
+function parseOrbit(str){
+  if(!str) return {theta:0,phi:DEFAULT_PHI,radius:DEFAULT_RADIUS};
+  const parts = str.trim().split(/\s+/);
+  const [thetaS, phiS, radiusS] = parts;
+  const theta = parseFloat(thetaS.replace('deg','')) || 0;
+  const phi = parseFloat(phiS.replace('deg','')) || DEFAULT_PHI;
+  const radius = radiusS || DEFAULT_RADIUS;
+  return {theta,phi,radius};
+}
 
-  let heading = event.webkitCompassHeading || (360 - event.alpha);
-  if (heading !== null && heading !== undefined) {
-    const correctedHeading = (heading + northOffset) % 360;
-    // Only rotate around vertical axis (y-axis), keep tilt fixed
-    const currentOrbit = model.getCameraOrbit();
-    model.cameraOrbit = `${correctedHeading}deg auto auto`;
+/* Utility: set orbit (theta in deg, phi in deg, radius string like '3m' or 'auto') */
+function setOrbit(theta, phi, radius = 'auto', instant = false){
+  // clamp phi within allowed range
+  const clampedPhi = Math.max(MIN_PHI, Math.min(MAX_PHI, phi));
+  const orbitStr = `${theta}deg ${clampedPhi}deg ${radius}`;
+  if(instant){
+    viewer.cameraOrbit = orbitStr;
+    return;
+  }
+  // smooth interpolation
+  animateOrbitTo(theta, clampedPhi, radius);
+}
+
+/* Smooth animation of cameraOrbit -> simple linear interpolation */
+let animRequest = null;
+function animateOrbitTo(destTheta, destPhi, radius='auto', duration=500){
+  if(animRequest) cancelAnimationFrame(animRequest);
+  const start = parseOrbit(viewer.cameraOrbit || viewer.getCameraOrbit && viewer.getCameraOrbit());
+  const sTheta = start.theta;
+  const sPhi = start.phi;
+  const t0 = performance.now();
+
+  function step(now){
+    const t = Math.min(1, (now - t0)/duration);
+    // shortest path for theta (handle wrap-around)
+    let delta = ((destTheta - sTheta + 540) % 360) - 180;
+    const theta = sTheta + delta * t;
+    const phi = sPhi + (destPhi - sPhi) * t;
+    viewer.cameraOrbit = `${theta}deg ${phi}deg ${radius}`;
+    if(t < 1){
+      animRequest = requestAnimationFrame(step);
+    } else {
+      animRequest = null;
+    }
+  }
+  animRequest = requestAnimationFrame(step);
+}
+
+/* ==========================
+   Device orientation handling
+   ========================== */
+function enableDeviceOrientation(){
+  // ask permission on iOS when required
+  function startListening(){
+    window.addEventListener('deviceorientation', deviceOrientationHandler, true);
+    trackingActive = true;
+    document.getElementById('btn-orient').classList.add('active');
+    document.getElementById('btn-explore').classList.remove('active');
+  }
+
+  if(typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function'){
+    // iOS 13+ requires explicit permission
+    DeviceOrientationEvent.requestPermission()
+      .then(resp=>{
+        if(resp === 'granted') startListening();
+        else alert('Device orientation permission denied — Orient mode will not align to north.');
+      })
+      .catch(err=>{
+        console.warn('DeviceOrientation permission error:', err);
+        alert('Device orientation not available.');
+      });
+  } else {
+    // other platforms
+    startListening();
   }
 }
 
-// iOS permission for device orientation
-if (typeof DeviceOrientationEvent.requestPermission === 'function') {
-  document.body.addEventListener('click', async () => {
-    const response = await DeviceOrientationEvent.requestPermission();
-    if (response === 'granted') {
-      window.addEventListener('deviceorientation', handleOrientation, true);
-    } else {
-      alert('Compass permission denied.');
-    }
-  });
-} else {
-  window.addEventListener('deviceorientation', handleOrientation, true);
+function disableDeviceOrientation(){
+  window.removeEventListener('deviceorientation', deviceOrientationHandler, true);
+  trackingActive = false;
 }
 
-// Detect user interactions
-model.addEventListener('pointerdown', () => {
+function deviceOrientationHandler(e){
+  if(!trackingActive) return;
+  // Some platforms give webkitCompassHeading (iOS), others provide alpha (device rotation)
+  let heading;
+  if(typeof e.webkitCompassHeading === 'number'){
+    // iOS: webkitCompassHeading is degrees from north
+    heading = e.webkitCompassHeading;
+  } else if(typeof e.alpha === 'number'){
+    // Most Android: alpha is rotation around z-axis in degrees (0 = north on some devices)
+    // We invert alpha to map to same sense as heading.
+    heading = 360 - e.alpha;
+  } else {
+    return;
+  }
+
+  // compute corrected heading (apply north offset)
+  const corrected = (heading + northOffset) % 360;
+
+  // IMPORTANT: we only update theta (horizontal rotation). Keep phi as user's chosen.
+  targetTheta = corrected;
+
+  // only animate when not being interacted by user
+  if(!userInteracting){
+    // animate smoothly to new heading while preserving current phi
+    const current = parseOrbit(viewer.cameraOrbit || viewer.getCameraOrbit && viewer.getCameraOrbit());
+    animateOrbitTo(targetTheta, current.phi, current.radius, 400);
+  }
+}
+
+/* ==========================
+   Modes: Orient <-> Explore
+   ========================== */
+const btnOrient = document.getElementById('btn-orient');
+const btnExplore = document.getElementById('btn-explore');
+
+function setMode(mode){
+  currentMode = mode;
+  if(mode === 'orient'){
+    // minimal constraints: allow user to change phi but don't go under map
+    viewer.minCameraOrbit = `0deg ${MIN_PHI}deg auto`;
+    viewer.maxCameraOrbit = `360deg ${MAX_PHI}deg auto`;
+    // enable device orientation tracking
+    enableDeviceOrientation();
+  } else {
+    // Explore mode: disable device orientation and give full manual freedom (but no underside)
+    disableDeviceOrientation();
+    viewer.minCameraOrbit = `0deg ${MIN_PHI}deg auto`;
+    viewer.maxCameraOrbit = `360deg ${MAX_PHI}deg auto`;
+    // allow immediate manual control; no reorientation by device
+  }
+  // update UI classes
+  btnOrient.classList.toggle('active', mode === 'orient');
+  btnExplore.classList.toggle('active', mode === 'explore');
+}
+
+/* Mode toggle handlers */
+btnOrient.addEventListener('click', () => setMode('orient'));
+btnExplore.addEventListener('click', () => setMode('explore'));
+
+/* ==========================
+   User interaction handling
+   - When user interacts: pause device orientation (so they can explore)
+   - After short idle, if in orient mode, resume tracking and smoothly align theta to north
+   ========================== */
+let userIdleTimer = null;
+viewer.addEventListener('pointerdown', () => {
   userInteracting = true;
-  orientationActive = false; // stop device-orientation while interacting
+  // temporarily disable tracking effect when the user starts interaction
 });
-
-model.addEventListener('pointerup', () => {
+viewer.addEventListener('pointerup', () => {
   userInteracting = false;
-  // smooth realign after a small delay
-  setTimeout(() => { orientationActive = true; }, 500);
+  // after brief idle, re-enable device-based animation if we are in orient mode
+  if(userIdleTimer) clearTimeout(userIdleTimer);
+  userIdleTimer = setTimeout(()=>{
+    if(currentMode === 'orient' && trackingActive){
+      // read current device heading immediately by relying on deviceOrientationHandler's last value
+      // animate model back to that heading but *preserve the current phi* (user chosen)
+      // get current phi:
+      const current = parseOrbit(viewer.cameraOrbit || viewer.getCameraOrbit && viewer.getCameraOrbit());
+      const desiredTheta = targetTheta || current.theta;
+      animateOrbitTo(desiredTheta, current.phi, current.radius, 600);
+    }
+  }, 600);
 });
 
-// Optional: Recenter button
-recenterBtn.addEventListener('click', () => {
-  model.cameraOrbit = `0deg auto auto`;
+/* Also listen for camera-change (when user uses UI to change phi), update targetPhi */
+viewer.addEventListener('camera-change', () => {
+  // keep track of user's chosen phi so orient mode doesn't override it
+  const current = parseOrbit(viewer.cameraOrbit || viewer.getCameraOrbit && viewer.getCameraOrbit());
+  targetPhi = current.phi;
 });
+
+/* ==========================
+   Floor switching
+   ========================== */
+const floorButtons = document.querySelectorAll('.floors button');
+function setFloor(key){
+  // if key not in MODEL_SOURCES, do nothing
+  if(!MODEL_SOURCES[key]) return;
+  // UI active state
+  floorButtons.forEach(b => b.classList.toggle('active', b.dataset.floor === key));
+  // swap GLB source
+  viewer.src = MODEL_SOURCES[key];
+  // reset camera to a nice overview (we keep phi)
+  setTimeout(()=>{ // slight delay to allow model to load
+    setOrbit(0, DEFAULT_PHI, 'auto', true);
+  }, 300);
+}
+
+/* attach handlers to floor buttons */
+floorButtons.forEach(btn => {
+  btn.addEventListener('click', ()=> setFloor(btn.dataset.floor));
+});
+
+/* Recenter button: brings camera to north & chosen phi */
+document.getElementById('btn-recenter').addEventListener('click', ()=>{
+  // compute current phi and animate to theta=0 (model north)
+  const cur = parseOrbit(viewer.cameraOrbit || viewer.getCameraOrbit && viewer.getCameraOrbit());
+  animateOrbitTo(0, cur.phi, cur.radius, 700);
+});
+
+/* Info/legend button (simple toggle) */
+document.getElementById('btn-info').addEventListener('click', ()=>{
+  const legend = document.getElementById('legend');
+  legend.style.display = legend.style.display === 'none' ? 'block' : 'none';
+});
+
+/* ==========================
+   Initialization: load default floor and set initial constraints
+   ========================== */
+(function init(){
+  // load default floor
+  const initial = 'ground';
+  if(MODEL_SOURCES[initial]) viewer.src = MODEL_SOURCES[initial];
+
+  // set initial camera limits using JS properties (must be set programmatically)
+  viewer.minCameraOrbit = `0deg ${MIN_PHI}deg auto`;
+  viewer.maxCameraOrbit = `360deg ${MAX_PHI}deg auto`;
+  // set an initial camera orbit (theta phi radius)
+  viewer.cameraOrbit = `0deg ${DEFAULT_PHI}deg ${DEFAULT_RADIUS}`;
+
+  // ensure we start in Orient mode and attempt to enable orientation (permission prompt will be triggered if needed)
+  setMode('orient');
+
+  // warm-up: read initial orbit
+  const cur = parseOrbit(viewer.cameraOrbit || viewer.getCameraOrbit && viewer.getCameraOrbit());
+  targetTheta = cur.theta;
+  targetPhi = cur.phi;
+})();
+
 </script>
 </body>
 </html>
