@@ -60,12 +60,7 @@ const recenterBtn = document.getElementById('recenterBtn');
 
 // === CONFIG ===
 const northOffset = 0;  // Adjust to align model north
-const minTilt = 30;
-const maxTilt = 90;
 
-// Pick a random tilt each time the model reorients
-const tiltAngle = Math.random() * (maxTilt - minTilt) + minTilt;
-model.cameraOrbit = `${correctedHeading}deg ${tiltAngle}deg auto`;
 
 // Track user interaction
 let userInteracting = false;
@@ -80,7 +75,7 @@ function handleOrientation(event) {
     const correctedHeading = (heading + northOffset) % 360;
     // Only rotate around vertical axis (y-axis), keep tilt fixed
     const currentOrbit = model.getCameraOrbit();
-    model.cameraOrbit = `${correctedHeading}deg ${tiltAngle}deg auto`;
+    model.cameraOrbit = `${correctedHeading}deg auto auto`;
   }
 }
 
@@ -112,7 +107,7 @@ model.addEventListener('pointerup', () => {
 
 // Optional: Recenter button
 recenterBtn.addEventListener('click', () => {
-  model.cameraOrbit = `0deg ${tiltAngle}deg auto`;
+  model.cameraOrbit = `0deg auto auto`;
 });
 </script>
 </body>
