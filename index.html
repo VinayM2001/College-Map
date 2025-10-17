@@ -63,24 +63,38 @@
     scene.add(ground);
 
     // Load Model
-    const loader = new GLTFLoader();
-    loader.load(
-      '1st_floor_Final.glb', // 👈 make sure your model name matches exactly
-      (gltf) => {
-        const model = gltf.scene;
-        model.position.set(0, 0, 0);
-        model.scale.set(1, 1, 1);
-        scene.add(model);
+const loader = new GLTFLoader();
+loader.load(
+  'model.glb',
+  (gltf) => {
+    const model = gltf.scene;
+    console.log('✅ Model loaded:', model);
 
-        // Optional: auto center camera on model
-        const box = new THREE.Box3().setFromObject(model);
-        const center = box.getCenter(new THREE.Vector3());
-        controls.target.copy(center);
-        camera.lookAt(center);
-      },
-      (xhr) => console.log(`Loading: ${(xhr.loaded / xhr.total) * 100}%`),
-      (error) => console.error('Error loading model:', error)
-    );
+    model.position.set(0, 0, 0);
+    model.scale.set(1, 1, 1);
+    scene.add(model);
+
+    // visualize where the model is
+    const box = new THREE.Box3().setFromObject(model);
+    const size = box.getSize(new THREE.Vector3());
+    const center = box.getCenter(new THREE.Vector3());
+    console.log('Model center:', center, 'size:', size);
+
+    // add a red wireframe cube around the model
+    const helper = new THREE.Box3Helper(box, 0xff0000);
+    scene.add(helper);
+
+    // move camera so model fits in view
+    const maxDim = Math.max(size.x, size.y, size.z);
+    const fov = camera.fov * (Math.PI / 180);
+    let cameraZ = Math.abs(maxDim / Math.sin(fov / 2));
+    camera.position.set(center.x + cameraZ / 3, center.y + cameraZ / 3, center.z + cameraZ);
+    controls.target.copy(center);
+    camera.lookAt(center);
+  },
+  (xhr) => console.log(`Loading: ${(xhr.loaded / xhr.total) * 100}%`),
+  (error) => console.error('❌ Error loading model:', error)
+);
 
     // Resize
     window.addEventListener('resize', () => {
