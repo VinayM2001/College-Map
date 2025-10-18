@@ -1,211 +1,143 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>NID Campus 3D Map - Robust Compass</title>
-    <style>
-        body { margin: 0; overflow: hidden; background-color: #f0f0f0; } 
-        canvas { display: block; }
-        #overlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            background: rgba(0, 0, 0, 0.8);
-            color: white;
-            font-family: sans-serif;
-            z-index: 100;
-            text-align: center;
-        }
-        #permission-button {
-            padding: 15px 30px;
-            font-size: 1.2em;
-            cursor: pointer;
-            background-color: #3f68a3;
-            border: none;
-            border-radius: 5px;
-            color: white;
-            margin-top: 20px;
-        }
-        #compass-status {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            color: white;
-            background: rgba(0, 0, 0, 0.6);
-            padding: 5px 10px;
-            border-radius: 5px;
-            font-family: sans-serif;
-            font-size: 14px;
-            z-index: 50;
-        }
-    </style>
-    <script type="importmap">
-        {
-          "imports": {
-            "three": "https://unpkg.com/three@0.165.0/build/three.module.js",
-            "three/addons/": "https://unpkg.com/three@0.165.0/examples/jsm/"
-          }
-        }
-    </script>
+  <meta charset="UTF-8" />
+  <title>NID Campus 3D Map</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body { margin: 0; overflow: hidden; }
+    canvas { display: block; }
+    #ui {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 10px;
+      background: rgba(0,0,0,0.5);
+      padding: 10px 20px;
+      border-radius: 20px;
+    }
+    button {
+      color: white;
+      background: #0078ff;
+      border: none;
+      border-radius: 6px;
+      padding: 8px 14px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+  </style>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.165.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.165.0/examples/jsm/"
+      }
+    }
+  </script>
 </head>
 <body>
-    <div id="overlay">
-        <h2>Enable Campus Compass 🧭</h2>
-        <p>This feature requires access to your device's motion sensors to align the map with the real-world North.</p>
-        <button id="permission-button">Allow Compass Access</button>
-        <p style="margin-top: 20px; font-size: 0.8em;">(Note: This requires the page to be served over HTTPS or localhost.)</p>
-    </div>
+  <div id="ui">
+    <button id="orientBtn">Enable Orientation</button>
+    <button id="exploreBtn">Explore Freely</button>
+  </div>
 
-    <div id="compass-status">Compass: Waiting for User Action...</div>
+  <script type="module">
+    import * as THREE from 'three';
+    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { DeviceOrientationControls } from 'three/addons/controls/DeviceOrientationControls.js';
+    import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 
-    <script type="module">
-        import * as THREE from 'three';
-        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    // --- SCENE SETUP ---
+    const scene = new THREE.Scene();
 
-        let mapModel = null;
-        let initialAlpha = null; 
+    // Camera
+    const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.set(6, 6, 6);
 
-        // --- 1. Setup Scene, Camera, and Renderer ---
-        const scene = new THREE.Scene();
-        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        const renderer = new THREE.WebGLRenderer({ antialias: true });
+    // Renderer
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.outputEncoding = THREE.sRGBEncoding;
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.1;
+    document.body.appendChild(renderer.domElement);
 
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        document.body.appendChild(renderer.domElement);
+    // --- LIGHTING ---
+    const ambient = new THREE.AmbientLight(0xffffff, 0.6);
+    scene.add(ambient);
 
-        // --- 2. Add Camera Controls (Orbit, Pan, Zoom) ---
-        const controls = new OrbitControls(camera, renderer.domElement);
-        controls.enableDamping = true; 
-        controls.minPolarAngle = 0;             
-        controls.maxPolarAngle = Math.PI / 2;   // Stop at the ground
-        controls.maxDistance = 20;              
-        controls.minDistance = 3;               
-        
-        camera.position.set(5, 7, 5); 
-        controls.update();
+    const sun = new THREE.DirectionalLight(0xffffff, 1.2);
+    sun.position.set(10, 15, 8);
+    sun.castShadow = true;
+    scene.add(sun);
 
-        // --- 3. Add Lighting ---
-        scene.add(new THREE.AmbientLight(0xffffff, 1.0));
-        const directionalLight = new THREE.DirectionalLight(0xffffff, 2.0);
-        directionalLight.position.set(10, 15, 5);
-        scene.add(directionalLight);
+    // Soft environmental lighting (like a sky dome)
+    new RGBELoader().load('https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/studio_small_03_1k.hdr', (hdr) => {
+      hdr.mapping = THREE.EquirectangularReflectionMapping;
+      scene.environment = hdr;
+      scene.background = hdr;
+    });
 
-        // --- 4. Load the 3D Model ---
-        const loader = new GLTFLoader();
-        // **IMPORTANT:** Replace with your actual model path
-        loader.load('./map.glb', function (gltf) {
-            mapModel = gltf.scene;
-            scene.add(mapModel);
-            controls.target.copy(mapModel.position);
-            controls.update();
-            console.log('3D Map Model Loaded.');
+    // --- CONTROLS ---
+    const orbit = new OrbitControls(camera, renderer.domElement);
+    orbit.enableDamping = true;
+    orbit.maxPolarAngle = Math.PI / 2.1; // prevent going under the floor
+    orbit.minDistance = 1;
+    orbit.maxDistance = 20;
+    orbit.target.set(0, 0, 0);
+    orbit.update();
 
-            // Hide the overlay only if the model is loaded AND permissions are granted
-            // If permissions are already granted, this will be handled by the button click
-            if (document.getElementById('overlay').style.display !== 'none') {
-                 document.getElementById('permission-button').textContent = "Start Viewing Map";
-            }
-        }, undefined, function (error) {
-            console.error('Model loading failed:', error);
-            document.getElementById('compass-status').textContent = "ERROR: Model Failed to Load";
-        });
+    let deviceControls;
+    let usingDeviceOrientation = false;
 
+    // --- LOAD MODEL ---
+    const loader = new GLTFLoader();
+    loader.load('./map.glb', (gltf) => {
+      const model = gltf.scene;
+      scene.add(model);
 
-        // --- 5. COMPASS LOGIC ---
-        const statusElement = document.getElementById('compass-status');
-        const overlay = document.getElementById('overlay');
-        const permissionButton = document.getElementById('permission-button');
+      // Center model
+      const box = new THREE.Box3().setFromObject(model);
+      const center = box.getCenter(new THREE.Vector3());
+      model.position.sub(center);
 
-        function handleOrientation(event) {
-            // Get the compass data, prioritizing iOS webkit property if available
-            let alpha = event.alpha;
-            if (event.webkitCompassHeading !== undefined) {
-                alpha = event.webkitCompassHeading;
-            }
+      // Optional scale for large campus models
+      // model.scale.set(0.5, 0.5, 0.5);
 
-            if (alpha === null || alpha === undefined) {
-                statusElement.textContent = "Compass: Data Unavailable (Recalibrating)";
-                return;
-            }
+      orbit.target.copy(model.position);
+    });
 
-            if (mapModel) {
-                // Initialize the starting direction only once
-                if (initialAlpha === null) {
-                    // Set the initial North as the starting point
-                    initialAlpha = alpha;
-                    statusElement.textContent = `Compass: Locked to North (${alpha.toFixed(1)}°)`;
-                }
+    // --- BUTTONS ---
+    document.getElementById('orientBtn').addEventListener('click', () => {
+      if (!deviceControls) deviceControls = new DeviceOrientationControls(camera);
+      usingDeviceOrientation = true;
+      orbit.enabled = false;
+    });
 
-                // Calculate the rotation needed to keep the map's North (positive Z-axis) 
-                // facing the device's current orientation.
-                const rotationDiff = (alpha - initialAlpha) * (Math.PI / 180);
+    document.getElementById('exploreBtn').addEventListener('click', () => {
+      usingDeviceOrientation = false;
+      orbit.enabled = true;
+    });
 
-                // Apply the rotation around the Y-axis. We use negative rotation 
-                // because turning the device clockwise needs the model to turn counter-clockwise.
-                mapModel.rotation.y = -rotationDiff;
-            }
-            
-            // Optional detailed status update (can cause flicker)
-            // statusElement.textContent = `Compass: ${alpha.toFixed(1)}° | Rot: ${(-rotationDiff * 180 / Math.PI).toFixed(1)}°`;
-        }
-        
-        // --- 6. Permission Handling (User Interaction Required) ---
-        function startCompass() {
-            // 6.1 Check for iOS 13+ permission request (explicit function call)
-            if (typeof DeviceOrientationEvent.requestPermission === 'function') {
-                DeviceOrientationEvent.requestPermission()
-                    .then(permissionState => {
-                        if (permissionState === 'granted') {
-                            window.addEventListener('deviceorientation', handleOrientation, true);
-                            overlay.style.display = 'none';
-                            statusElement.textContent = "Compass: Active";
-                        } else {
-                            statusElement.textContent = "Compass: Permission Denied by User";
-                            overlay.style.display = 'flex'; // Keep overlay visible
-                        }
-                    })
-                    .catch(error => {
-                        console.error("Permission request failed:", error);
-                        statusElement.textContent = "Compass: Permission Error";
-                    });
-            } 
-            // 6.2 Handle older Android/Desktop browsers where permission isn't explicitly requested
-            else if (window.DeviceOrientationEvent) {
-                window.addEventListener('deviceorientation', handleOrientation, true);
-                overlay.style.display = 'none';
-                statusElement.textContent = "Compass: Active (Legacy Mode)";
-            } else {
-                // Device does not support the API
-                overlay.style.display = 'none';
-                statusElement.textContent = "Compass: Not Supported on this Device/Browser";
-            }
-        }
+    // --- RENDER LOOP ---
+    function animate() {
+      requestAnimationFrame(animate);
+      if (usingDeviceOrientation && deviceControls) deviceControls.update();
+      if (!usingDeviceOrientation) orbit.update();
+      renderer.render(scene, camera);
+    }
+    animate();
 
-        permissionButton.addEventListener('click', startCompass);
-
-
-        // --- 7. Animation Loop & Resize Handler ---
-        function animate() {
-            requestAnimationFrame(animate);
-            controls.update(); 
-            renderer.render(scene, camera);
-        }
-
-        function onWindowResize() {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        }
-
-        window.addEventListener('resize', onWindowResize, false);
-        animate();
-    </script>
+    // --- RESIZE HANDLER ---
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+  </script>
 </body>
 </html>
