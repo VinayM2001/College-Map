@@ -1,115 +1,160 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
-  <title>3D Model Viewer - Three.js</title>
-  <style>
-    html, body {
-      margin: 0;
-      height: 100%;
-      overflow: hidden;
-      background-color: #101010;
-    }
-    canvas {
-      width: 100%;
-      height: 100%;
-      display: block;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <title>NID Campus 3D Map - Compass Aligned</title>
+    <style>
+        body { margin: 0; overflow: hidden; } 
+        canvas { display: block; }
+        #compass-status {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-family: sans-serif;
+            font-size: 14px;
+        }
+    </style>
+    <script type="importmap">
+        {
+          "imports": {
+            "three": "https://unpkg.com/three@0.165.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.165.0/examples/jsm/"
+          }
+        }
+    </script>
 </head>
 <body>
-  <script type="module">
-    import * as THREE from 'https://unpkg.com/three@0.168.0/build/three.module.js';
-    import { OrbitControls } from 'https://unpkg.com/three@0.168.0/examples/jsm/controls/OrbitControls.js';
-    import { GLTFLoader } from 'https://unpkg.com/three@0.168.0/examples/jsm/loaders/GLTFLoader.js';
+    <div id="compass-status">Compass: Connecting...</div>
+    <script type="module">
+        import * as THREE from 'three';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-    // Scene
-    const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x1a1a1a);
+        // --- 1. Setup Scene, Camera, and Renderer ---
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
 
-    // Camera
-    const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
-    camera.position.set(2, 2, 3);
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
 
-    // Renderer
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setPixelRatio(window.devicePixelRatio);
-    document.body.appendChild(renderer.domElement);
+        // --- 2. Add Camera Controls (Orbit, Pan, Zoom) ---
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true; 
+        controls.minPolarAngle = 0;             // Allow orbiting from straight above (top)
+        controls.maxPolarAngle = Math.PI / 2;   // Stop orbiting at the ground plane (no bottom view)
+        controls.maxDistance = 20;              // Limit max zoom-out distance
+        controls.minDistance = 3;               // Limit min zoom-in distance
+        
+        // Initial camera position (adjust to center your map)
+        camera.position.set(5, 7, 5); 
+        controls.update();
 
-    // Controls
-    const controls = new OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true;
-    controls.target.set(0, 0.5, 0);
+        // --- 3. Add Lighting ---
+        scene.add(new THREE.AmbientLight(0xffffff, 1.0));
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 2.0);
+        directionalLight.position.set(10, 15, 5);
+        scene.add(directionalLight);
 
-    // Lighting
-    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 1.2);
-    hemiLight.position.set(0, 20, 0);
-    scene.add(hemiLight);
+        let mapModel = null; // Variable to hold the loaded 3D model
 
-    const dirLight = new THREE.DirectionalLight(0xffffff, 1);
-    dirLight.position.set(5, 10, 7.5);
-    dirLight.castShadow = true;
-    scene.add(dirLight);
+        // --- 4. Load the 3D Model ---
+        const loader = new GLTFLoader();
 
-    // Ground
-    const ground = new THREE.Mesh(
-      new THREE.PlaneGeometry(20, 20),
-      new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 1 })
-    );
-    ground.rotation.x = -Math.PI / 2;
-    ground.receiveShadow = true;
-    scene.add(ground);
+        // **IMPORTANT:** Replace with your actual model path
+        loader.load(
+            './map.glb', 
+            function (gltf) {
+                mapModel = gltf.scene;
+                // Ensure your model's 'North' direction aligns with its positive Z-axis.
+                // If it was modeled differently, you might need a small initial rotation here.
+                scene.add(mapModel);
+                controls.target.copy(mapModel.position);
+                controls.update();
+            },
+            function (xhr) {
+                console.log('Model loaded: ' + (xhr.loaded / xhr.total * 100).toFixed(2) + '%');
+            },
+            function (error) {
+                console.error('An error occurred while loading the model:', error);
+            }
+        );
 
-    // Load Model
-const loader = new GLTFLoader();
-loader.load(
-  './1st_floor_Final.glb',
-  (gltf) => {
-    const model = gltf.scene;
-    console.log('✅ Model loaded:', model);
+        // --- 5. Compass Alignment Logic (Device Orientation) ---
+        const statusElement = document.getElementById('compass-status');
+        let initialAlpha = null; // Stores the initial North direction of the device
+        
+        function handleOrientation(event) {
+            // The 'alpha' value is the compass direction (0-360 degrees) relative to North.
+            let alpha = event.alpha;
 
-    model.position.set(0, 0, 0);
-    model.scale.set(1, 1, 1);
-    scene.add(model);
+            if (alpha === null) {
+                statusElement.textContent = "Compass: Data Unavailable";
+                return;
+            }
 
-    // visualize where the model is
-    const box = new THREE.Box3().setFromObject(model);
-    const size = box.getSize(new THREE.Vector3());
-    const center = box.getCenter(new THREE.Vector3());
-    console.log('Model center:', center, 'size:', size);
+            // --- 5.1 Handle Permissions (iOS 13+ and some browsers) ---
+            if (typeof event.webkitCompassHeading !== 'undefined') {
+                // Use non-standard webkit value if available (more stable on iOS)
+                alpha = event.webkitCompassHeading;
+            } else if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+                // Request permission for security/privacy (for modern mobile browsers)
+                DeviceOrientationEvent.requestPermission()
+                    .then(permissionState => {
+                        if (permissionState !== 'granted') {
+                            statusElement.textContent = "Compass: Permission Denied";
+                        }
+                    })
+                    .catch(console.error);
+            }
 
-    // add a red wireframe cube around the model
-    const helper = new THREE.Box3Helper(box, 0xff0000);
-    scene.add(helper);
+            if (mapModel) {
+                // Step 1: Initialize the starting direction
+                if (initialAlpha === null) {
+                    initialAlpha = alpha;
+                    statusElement.textContent = `Compass: Initialized (${alpha.toFixed(1)}°)`
+                }
 
-    // move camera so model fits in view
-    const maxDim = Math.max(size.x, size.y, size.z);
-    const fov = camera.fov * (Math.PI / 180);
-    let cameraZ = Math.abs(maxDim / Math.sin(fov / 2));
-    camera.position.set(center.x + cameraZ / 3, center.y + cameraZ / 3, center.z + cameraZ);
-    controls.target.copy(center);
-    camera.lookAt(center);
-  },
-  (xhr) => console.log(`Loading: ${(xhr.loaded / xhr.total) * 100}%`),
-  (error) => console.error('❌ Error loading model:', error)
-);
+                // Step 2: Calculate the required rotation difference
+                // Rotation is calculated as the difference between the current device orientation (alpha)
+                // and the initial orientation when the app started.
+                const rotationAngle = (alpha - initialAlpha) * (Math.PI / 180);
 
-    // Resize
-    window.addEventListener('resize', () => {
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
-    });
+                // Step 3: Apply rotation to the entire 3D map scene (around the Y-axis)
+                // We rotate the model by the negative angle because rotating the model clockwise 
+                // is equivalent to turning the camera counter-clockwise.
+                mapModel.rotation.y = -rotationAngle;
+            }
 
-    // Animate
-    function animate() {
-      requestAnimationFrame(animate);
-      controls.update();
-      renderer.render(scene, camera);
-    }
-    animate();
-  </script>
+            // statusElement.textContent = `Compass: ${alpha.toFixed(1)}° | Rot: ${(-rotationAngle * 180 / Math.PI).toFixed(1)}°`;
+        }
+
+        // Attach the event listener for device orientation
+        if (window.DeviceOrientationEvent) {
+            window.addEventListener('deviceorientation', handleOrientation, true);
+        } else {
+            statusElement.textContent = "Compass: Not Supported";
+        }
+
+        // --- 6. Animation Loop & Resize Handler ---
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update(); 
+            renderer.render(scene, camera);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        window.addEventListener('resize', onWindowResize, false);
+        animate();
+    </script>
 </body>
 </html>
