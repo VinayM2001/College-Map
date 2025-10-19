@@ -2,11 +2,35 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>NID Campus 3D Map - Robust Compass</title>
+    <title>NID Campus 3D Map - Dual Mode</title>
     <style>
-        body { margin: 0; overflow: hidden; background-color: #f0f0f0; } 
-        canvas { display: block; }
+        body { margin: 0; overflow: hidden; } 
+        canvas { display: block; } 
+        #ui-controls {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            display: flex;
+            gap: 10px;
+            z-index: 50;
+        }
+        .mode-button {
+            padding: 10px 20px;
+            font-size: 1em;
+            cursor: pointer;
+            background-color: #555;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            transition: background-color 0.2s;
+        }
+        .mode-button:hover { background-color: #777; }
+        .mode-button.active {
+            background-color: #3f68a3;
+            font-weight: bold;
+        }
         #overlay {
+            /* ... (Overlay styles remain the same for initial permission) ... */
             position: absolute;
             top: 0;
             left: 0;
@@ -57,12 +81,17 @@
 <body>
     <div id="overlay">
         <h2>Enable Campus Compass 🧭</h2>
-        <p>This feature requires access to your device's motion sensors to align the map with the real-world North.</p>
-        <button id="permission-button">Allow Compass Access</button>
+        <p>This feature requires access to your device's motion sensors to align the map with the real-world North. Please click "Allow" when prompted.</p>
+        <button id="permission-button">Start Viewing Map</button>
         <p style="margin-top: 20px; font-size: 0.8em;">(Note: This requires the page to be served over HTTPS or localhost.)</p>
     </div>
 
-    <div id="compass-status">Compass: Waiting for User Action...</div>
+    <div id="ui-controls">
+        <button id="explore-btn" class="mode-button active">Explore Mode</button>
+        <button id="compass-btn" class="mode-button">Compass Mode</button>
+    </div>
+    
+    <div id="compass-status">Status: Initializing...</div>
 
     <script type="module">
         import * as THREE from 'three';
@@ -71,127 +100,156 @@
 
         let mapModel = null;
         let initialAlpha = null; 
+        let compassActive = false; // Flag if compass data is being used
+        let currentMode = 'explore'; 
 
         // --- 1. Setup Scene, Camera, and Renderer ---
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true }); 
+        renderer.setClearColor(0x000000, 0); 
 
         renderer.setSize(window.innerWidth, window.innerHeight);
         document.body.appendChild(renderer.domElement);
 
-        // --- 2. Add Camera Controls (Orbit, Pan, Zoom) ---
+        // --- 2. Camera Controls Setup ---
         const controls = new OrbitControls(camera, renderer.domElement);
         controls.enableDamping = true; 
-        controls.minPolarAngle = 0;             
-        controls.maxPolarAngle = Math.PI / 2;   // Stop at the ground
-        controls.maxDistance = 20;              
         controls.minDistance = 3;               
+        controls.maxDistance = 20;              
         
+        // Initial state for Explore Mode
+        controls.minPolarAngle = 0;             
+        controls.maxPolarAngle = Math.PI;       // Full 360 vertical rotation (top/bottom view allowed)
+        controls.enableRotate = true;           // Enabled for Explore Mode
+
         camera.position.set(5, 7, 5); 
         controls.update();
 
-        // --- 3. Add Lighting ---
-        scene.add(new THREE.AmbientLight(0xffffff, 1.0));
-        const directionalLight = new THREE.DirectionalLight(0xffffff, 2.0);
-        directionalLight.position.set(10, 15, 5);
+        // --- 3. Lighting ---
+        scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 2));
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 3.0);
+        directionalLight.position.set(5, 10, 5);
         scene.add(directionalLight);
 
-        // --- 4. Load the 3D Model ---
+        // --- 4. Model Loading and Centering ---
         const loader = new GLTFLoader();
-        // **IMPORTANT:** Replace with your actual model path
         loader.load('./1st_floor_Final.glb', function (gltf) {
             mapModel = gltf.scene;
-            scene.add(mapModel);
-            controls.target.copy(mapModel.position);
+            
+            // Centering the Model
+            const box = new THREE.Box3().setFromObject(mapModel);
+            const center = box.getCenter(new THREE.Vector3());
+            mapModel.position.sub(center); 
+            
+            controls.target.set(0, 0, 0);
             controls.update();
-            console.log('3D Map Model Loaded.');
 
-            // Hide the overlay only if the model is loaded AND permissions are granted
-            // If permissions are already granted, this will be handled by the button click
-            if (document.getElementById('overlay').style.display !== 'none') {
-                 document.getElementById('permission-button').textContent = "Start Viewing Map";
-            }
+            scene.add(mapModel);
+            
+            // Allow the user to proceed to mode selection
+            document.getElementById('permission-button').textContent = "Start Viewing Map";
         }, undefined, function (error) {
             console.error('Model loading failed:', error);
             document.getElementById('compass-status').textContent = "ERROR: Model Failed to Load";
         });
 
 
-        // --- 5. COMPASS LOGIC ---
-        const statusElement = document.getElementById('compass-status');
-        const overlay = document.getElementById('overlay');
-        const permissionButton = document.getElementById('permission-button');
+        // --- 5. Mode Switching Logic ---
 
+        function setMode(mode) {
+            if (currentMode === mode) return;
+
+            currentMode = mode;
+            document.querySelectorAll('.mode-button').forEach(btn => btn.classList.remove('active'));
+            document.getElementById(`${mode}-btn`).classList.add('active');
+
+            if (mode === 'explore') {
+                // EXPLORE MODE: Full Control (pan, zoom, orbit)
+                controls.enableRotate = true;
+                controls.maxPolarAngle = Math.PI; // Allow viewing from bottom
+                window.removeEventListener('deviceorientation', handleOrientation, true);
+                mapModel.rotation.y = 0; // Reset map rotation to neutral
+                document.getElementById('compass-status').textContent = "Status: Explore Mode Active";
+
+            } else if (mode === 'compass') {
+                // COMPASS MODE: Device Orientation Controls Rotation
+                
+                // 1. Angular Restrictions (Phi/Vertical Orbit)
+                controls.maxPolarAngle = Math.PI / 2; // Restrict vertical orbit to top-to-front view
+
+                // 2. Rotation Lock (Theta/Horizontal Orbit)
+                controls.enableRotate = false; // Disable manual rotation
+                
+                // 3. Start Compass Listener (if permissions are granted)
+                if (compassActive) {
+                    window.addEventListener('deviceorientation', handleOrientation, true);
+                    initialAlpha = null; // Force re-initialization of North lock
+                    document.getElementById('compass-status').textContent = "Compass: Listening for North...";
+                } else {
+                    document.getElementById('compass-status').textContent = "Compass: Not Available (Grant Permission)";
+                }
+            }
+            controls.update();
+        }
+
+        document.getElementById('explore-btn').addEventListener('click', () => setMode('explore'));
+        document.getElementById('compass-btn').addEventListener('click', () => setMode('compass'));
+
+
+        // --- 6. Compass Alignment Logic ---
+        const statusElement = document.getElementById('compass-status');
+        
         function handleOrientation(event) {
-            // Get the compass data, prioritizing iOS webkit property if available
+            if (!mapModel || currentMode !== 'compass') return;
+
             let alpha = event.alpha;
             if (event.webkitCompassHeading !== undefined) {
                 alpha = event.webkitCompassHeading;
             }
 
-            if (alpha === null || alpha === undefined) {
-                statusElement.textContent = "Compass: Data Unavailable (Recalibrating)";
-                return;
+            if (alpha === null || alpha === undefined) return;
+
+            if (initialAlpha === null) {
+                initialAlpha = alpha;
+                statusElement.textContent = `Compass: Locked to North (${alpha.toFixed(1)}°)`;
             }
 
-            if (mapModel) {
-                // Initialize the starting direction only once
-                if (initialAlpha === null) {
-                    // Set the initial North as the starting point
-                    initialAlpha = alpha;
-                    statusElement.textContent = `Compass: Locked to North (${alpha.toFixed(1)}°)`;
-                }
-
-                // Calculate the rotation needed to keep the map's North (positive Z-axis) 
-                // facing the device's current orientation.
-                const rotationDiff = (alpha - initialAlpha) * (Math.PI / 180);
-
-                // Apply the rotation around the Y-axis. We use negative rotation 
-                // because turning the device clockwise needs the model to turn counter-clockwise.
-                mapModel.rotation.y = -rotationDiff;
-            }
-            
-            // Optional detailed status update (can cause flicker)
-            // statusElement.textContent = `Compass: ${alpha.toFixed(1)}° | Rot: ${(-rotationDiff * 180 / Math.PI).toFixed(1)}°`;
+            // Calculate rotation difference and apply to model
+            const rotationDiff = (alpha - initialAlpha) * (Math.PI / 180);
+            mapModel.rotation.y = -rotationDiff;
         }
         
-        // --- 6. Permission Handling (User Interaction Required) ---
-        function startCompass() {
-            // 6.1 Check for iOS 13+ permission request (explicit function call)
-            if (typeof DeviceOrientationEvent.requestPermission === 'function') {
-                DeviceOrientationEvent.requestPermission()
+        // --- 7. Permission Handling (Triggers on Overlay Button Click) ---
+        const overlay = document.getElementById('overlay');
+        const permissionButton = document.getElementById('permission-button');
+
+        function startViewing() {
+            // Attempt to get device orientation permission (for mobile)
+            const requestPermission = DeviceOrientationEvent.requestPermission;
+
+            if (typeof requestPermission === 'function') {
+                requestPermission()
                     .then(permissionState => {
                         if (permissionState === 'granted') {
-                            window.addEventListener('deviceorientation', handleOrientation, true);
-                            overlay.style.display = 'none';
-                            statusElement.textContent = "Compass: Active";
-                        } else {
-                            statusElement.textContent = "Compass: Permission Denied by User";
-                            overlay.style.display = 'flex'; // Keep overlay visible
+                            compassActive = true; // Compass data is now available
                         }
                     })
-                    .catch(error => {
-                        console.error("Permission request failed:", error);
-                        statusElement.textContent = "Compass: Permission Error";
-                    });
+                    .catch(error => console.error("Permission request failed:", error));
+            } else if (window.DeviceOrientationEvent) {
+                 // For desktop/older browsers that don't need explicit request
+                 compassActive = true;
             } 
-            // 6.2 Handle older Android/Desktop browsers where permission isn't explicitly requested
-            else if (window.DeviceOrientationEvent) {
-                window.addEventListener('deviceorientation', handleOrientation, true);
-                overlay.style.display = 'none';
-                statusElement.textContent = "Compass: Active (Legacy Mode)";
-            } else {
-                // Device does not support the API
-                overlay.style.display = 'none';
-                statusElement.textContent = "Compass: Not Supported on this Device/Browser";
-            }
+            
+            // Hide overlay and start in the default 'explore' mode
+            overlay.style.display = 'none';
+            setMode('explore'); // Initializes the mode and controls
         }
 
-        permissionButton.addEventListener('click', startCompass);
+        permissionButton.addEventListener('click', startViewing);
 
 
-        // --- 7. Animation Loop & Resize Handler ---
+        // --- 8. Animation Loop & Resize Handler ---
         function animate() {
             requestAnimationFrame(animate);
             controls.update(); 
