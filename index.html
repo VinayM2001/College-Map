@@ -1,269 +1,149 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>NID Campus 3D Map - Dual Mode</title>
-    <style>
-        body { margin: 0; overflow: hidden; } 
-        canvas { display: block; } 
-        #ui-controls {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            display: flex;
-            gap: 10px;
-            z-index: 50;
-        }
-        .mode-button {
-            padding: 10px 20px;
-            font-size: 1em;
-            cursor: pointer;
-            background-color: #555;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            transition: background-color 0.2s;
-        }
-        .mode-button:hover { background-color: #777; }
-        .mode-button.active {
-            background-color: #3f68a3;
-            font-weight: bold;
-        }
-        #overlay {
-            /* ... (Overlay styles remain the same for initial permission) ... */
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            background: rgba(0, 0, 0, 0.8);
-            color: white;
-            font-family: sans-serif;
-            z-index: 100;
-            text-align: center;
-        }
-        #permission-button {
-            padding: 15px 30px;
-            font-size: 1.2em;
-            cursor: pointer;
-            background-color: #3f68a3;
-            border: none;
-            border-radius: 5px;
-            color: white;
-            margin-top: 20px;
-        }
-        #compass-status {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            color: white;
-            background: rgba(0, 0, 0, 0.6);
-            padding: 5px 10px;
-            border-radius: 5px;
-            font-family: sans-serif;
-            font-size: 14px;
-            z-index: 50;
-        }
-    </style>
-    <script type="importmap">
-        {
-          "imports": {
-            "three": "https://unpkg.com/three@0.165.0/build/three.module.js",
-            "three/addons/": "https://unpkg.com/three@0.165.0/examples/jsm/"
-          }
-        }
-    </script>
+  <meta charset="UTF-8">
+  <title>NID Campus 3D Map</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body { margin: 0; overflow: hidden; background: transparent; }
+    canvas { display: block; }
+    #toggleBtn {
+      position: absolute;
+      top: 15px;
+      right: 15px;
+      background: rgba(0, 0, 0, 0.6);
+      color: white;
+      border: none;
+      border-radius: 10px;
+      padding: 10px 15px;
+      font-size: 14px;
+      cursor: pointer;
+      z-index: 10;
+    }
+  </style>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.165.0/build/three.module.js",
+        "three/examples/jsm/": "https://unpkg.com/three@0.165.0/examples/jsm/"
+      }
+    }
+  </script>
 </head>
 <body>
-    <div id="overlay">
-        <h2>Enable Campus Compass 🧭</h2>
-        <p>This feature requires access to your device's motion sensors to align the map with the real-world North. Please click "Allow" when prompted.</p>
-        <button id="permission-button">Start Viewing Map</button>
-        <p style="margin-top: 20px; font-size: 0.8em;">(Note: This requires the page to be served over HTTPS or localhost.)</p>
-    </div>
+  <button id="toggleBtn">Switch to Orient Mode</button>
 
-    <div id="ui-controls">
-        <button id="explore-btn" class="mode-button active">Explore Mode</button>
-        <button id="compass-btn" class="mode-button">Compass Mode</button>
-    </div>
-    
-    <div id="compass-status">Status: Initializing...</div>
+  <script type="module">
+    import * as THREE from 'three';
+    import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+    import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
-    <script type="module">
-        import * as THREE from 'three';
-        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    let orientMode = false;
+    let model;
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
 
-        let mapModel = null;
-        let initialAlpha = null; 
-        let compassActive = false; // Flag if compass data is being used
-        let currentMode = 'explore'; 
+    // --- Scene, Camera, Renderer ---
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.set(3, 2, 5);
 
-        // --- 1. Setup Scene, Camera, and Renderer ---
-        const scene = new THREE.Scene();
-        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true }); 
-        renderer.setClearColor(0x000000, 0); 
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(window.devicePixelRatio);
+    document.body.appendChild(renderer.domElement);
 
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        document.body.appendChild(renderer.domElement);
+    // --- Lighting ---
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 1.2);
+    hemiLight.position.set(0, 20, 0);
+    scene.add(hemiLight);
 
-        // --- 2. Camera Controls Setup ---
-        const controls = new OrbitControls(camera, renderer.domElement);
-        controls.enableDamping = true; 
-        controls.minDistance = 3;               
-        controls.maxDistance = 20;              
-        
-        // Initial state for Explore Mode
-        controls.minPolarAngle = 0;             
-        controls.maxPolarAngle = Math.PI;       // Full 360 vertical rotation (top/bottom view allowed)
-        controls.enableRotate = true;           // Enabled for Explore Mode
+    const dirLight = new THREE.DirectionalLight(0xffffff, 1.8);
+    dirLight.position.set(10, 15, 10);
+    dirLight.castShadow = true;
+    scene.add(dirLight);
 
-        camera.position.set(5, 7, 5); 
+    // --- Controls ---
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+    controls.maxPolarAngle = Math.PI * 0.95;
+    controls.target.set(0, 0, 0);
+
+    // --- Load Model ---
+    const loader = new GLTFLoader();
+    loader.load('./1st_floor_Final.glb', (gltf) => {
+      model = gltf.scene;
+
+      // Center the model roughly
+      const box = new THREE.Box3().setFromObject(model);
+      const center = box.getCenter(new THREE.Vector3());
+      model.position.sub(center);
+
+      const size = box.getSize(new THREE.Vector3());
+      const scale = 3 / Math.max(size.x, size.y, size.z);
+      model.scale.setScalar(scale);
+
+      scene.add(model);
+      console.log('Model loaded & centered.');
+    });
+
+    // --- Device Orientation ---
+    let deviceAlpha = 0;
+    window.addEventListener('deviceorientation', (event) => {
+      if (orientMode && model) {
+        deviceAlpha = event.alpha || 0;
+        model.rotation.y = THREE.MathUtils.degToRad(-deviceAlpha);
+      }
+    }, true);
+
+    // --- Toggle Button ---
+    const toggleBtn = document.getElementById('toggleBtn');
+    toggleBtn.addEventListener('click', () => {
+      orientMode = !orientMode;
+      toggleBtn.innerText = orientMode ? 'Switch to Explore Mode' : 'Switch to Orient Mode';
+    });
+
+    // --- Raycasting (Click to Recenter) ---
+    function onClick(event) {
+      if (!model) return;
+
+      // Normalize mouse position to -1..1 range
+      mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+      mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+      raycaster.setFromCamera(mouse, camera);
+      const intersects = raycaster.intersectObject(model, true);
+
+      if (intersects.length > 0) {
+        const point = intersects[0].point;
+
+        // Animate the camera focus shift
+        new THREE.Vector3().lerpVectors(controls.target, point, 0.5);
+        controls.target.copy(point);
         controls.update();
 
-        // --- 3. Lighting ---
-        scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 2));
-        const directionalLight = new THREE.DirectionalLight(0xffffff, 3.0);
-        directionalLight.position.set(5, 10, 5);
-        scene.add(directionalLight);
+        console.log('Recentered to:', point);
+      }
+    }
 
-        // --- 4. Model Loading and Centering ---
-        const loader = new GLTFLoader();
-        loader.load('./1st_floor_Final.glb', function (gltf) {
-            mapModel = gltf.scene;
-            
-            // Centering the Model
-            const box = new THREE.Box3().setFromObject(mapModel);
-            const center = box.getCenter(new THREE.Vector3());
-            mapModel.position.sub(center); 
-            
-            controls.target.set(0, 0, 0);
-            controls.update();
+    window.addEventListener('click', onClick);
 
-            scene.add(mapModel);
-            
-            // Allow the user to proceed to mode selection
-            document.getElementById('permission-button').textContent = "Start Viewing Map";
-        }, undefined, function (error) {
-            console.error('Model loading failed:', error);
-            document.getElementById('compass-status').textContent = "ERROR: Model Failed to Load";
-        });
+    // --- Handle Resize ---
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
 
-
-        // --- 5. Mode Switching Logic ---
-
-        function setMode(mode) {
-            if (currentMode === mode) return;
-
-            currentMode = mode;
-            document.querySelectorAll('.mode-button').forEach(btn => btn.classList.remove('active'));
-            document.getElementById(`${mode}-btn`).classList.add('active');
-
-            if (mode === 'explore') {
-                // EXPLORE MODE: Full Control (pan, zoom, orbit)
-                controls.enableRotate = true;
-                controls.maxPolarAngle = Math.PI; // Allow viewing from bottom
-                window.removeEventListener('deviceorientation', handleOrientation, true);
-                mapModel.rotation.y = 0; // Reset map rotation to neutral
-                document.getElementById('compass-status').textContent = "Status: Explore Mode Active";
-
-            } else if (mode === 'compass') {
-                // COMPASS MODE: Device Orientation Controls Rotation
-                
-                // 1. Angular Restrictions (Phi/Vertical Orbit)
-                controls.maxPolarAngle = Math.PI / 2; // Restrict vertical orbit to top-to-front view
-
-                // 2. Rotation Lock (Theta/Horizontal Orbit)
-                controls.enableRotate = false; // Disable manual rotation
-                
-                // 3. Start Compass Listener (if permissions are granted)
-                if (compassActive) {
-                    window.addEventListener('deviceorientation', handleOrientation, true);
-                    initialAlpha = null; // Force re-initialization of North lock
-                    document.getElementById('compass-status').textContent = "Compass: Listening for North...";
-                } else {
-                    document.getElementById('compass-status').textContent = "Compass: Not Available (Grant Permission)";
-                }
-            }
-            controls.update();
-        }
-
-        document.getElementById('explore-btn').addEventListener('click', () => setMode('explore'));
-        document.getElementById('compass-btn').addEventListener('click', () => setMode('compass'));
-
-
-        // --- 6. Compass Alignment Logic ---
-        const statusElement = document.getElementById('compass-status');
-        
-        function handleOrientation(event) {
-            if (!mapModel || currentMode !== 'compass') return;
-
-            let alpha = event.alpha;
-            if (event.webkitCompassHeading !== undefined) {
-                alpha = event.webkitCompassHeading;
-            }
-
-            if (alpha === null || alpha === undefined) return;
-
-            if (initialAlpha === null) {
-                initialAlpha = alpha;
-                statusElement.textContent = `Compass: Locked to North (${alpha.toFixed(1)}°)`;
-            }
-
-            // Calculate rotation difference and apply to model
-            const rotationDiff = (alpha - initialAlpha) * (Math.PI / 180);
-            mapModel.rotation.y = -rotationDiff;
-        }
-        
-        // --- 7. Permission Handling (Triggers on Overlay Button Click) ---
-        const overlay = document.getElementById('overlay');
-        const permissionButton = document.getElementById('permission-button');
-
-        function startViewing() {
-            // Attempt to get device orientation permission (for mobile)
-            const requestPermission = DeviceOrientationEvent.requestPermission;
-
-            if (typeof requestPermission === 'function') {
-                requestPermission()
-                    .then(permissionState => {
-                        if (permissionState === 'granted') {
-                            compassActive = true; // Compass data is now available
-                        }
-                    })
-                    .catch(error => console.error("Permission request failed:", error));
-            } else if (window.DeviceOrientationEvent) {
-                 // For desktop/older browsers that don't need explicit request
-                 compassActive = true;
-            } 
-            
-            // Hide overlay and start in the default 'explore' mode
-            overlay.style.display = 'none';
-            setMode('explore'); // Initializes the mode and controls
-        }
-
-        permissionButton.addEventListener('click', startViewing);
-
-
-        // --- 8. Animation Loop & Resize Handler ---
-        function animate() {
-            requestAnimationFrame(animate);
-            controls.update(); 
-            renderer.render(scene, camera);
-        }
-
-        function onWindowResize() {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        }
-
-        window.addEventListener('resize', onWindowResize, false);
-        animate();
-    </script>
+    // --- Render Loop ---
+    function animate() {
+      requestAnimationFrame(animate);
+      controls.update();
+      renderer.render(scene, camera);
+    }
+    animate();
+  </script>
 </body>
 </html>
