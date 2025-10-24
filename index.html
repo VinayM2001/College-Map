@@ -40,7 +40,7 @@
     import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
     let orientMode = false;
-    let model;
+    let model, modelGroup;
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
 
@@ -62,7 +62,12 @@
     const dirLight = new THREE.DirectionalLight(0xffffff, 1.8);
     dirLight.position.set(10, 15, 10);
     dirLight.castShadow = true;
+    dirLight.shadow.mapSize.set(2048, 2048);
     scene.add(dirLight);
+
+    const fillLight = new THREE.DirectionalLight(0xffffff, 0.5);
+    fillLight.position.set(-10, 10, -10);
+    scene.add(fillLight);
 
     // --- Controls ---
     const controls = new OrbitControls(camera, renderer.domElement);
@@ -71,12 +76,16 @@
     controls.maxPolarAngle = Math.PI * 0.95;
     controls.target.set(0, 0, 0);
 
+    // --- Model Group ---
+    modelGroup = new THREE.Group();
+    scene.add(modelGroup);
+
     // --- Load Model ---
     const loader = new GLTFLoader();
     loader.load('./1st_floor_Final.glb', (gltf) => {
       model = gltf.scene;
 
-      // Center the model roughly
+      // Center the model
       const box = new THREE.Box3().setFromObject(model);
       const center = box.getCenter(new THREE.Vector3());
       model.position.sub(center);
@@ -85,16 +94,24 @@
       const scale = 3 / Math.max(size.x, size.y, size.z);
       model.scale.setScalar(scale);
 
-      scene.add(model);
+      // Add model to group
+      modelGroup.add(model);
       console.log('Model loaded & centered.');
     });
 
-    // --- Device Orientation ---
+    // --- Device Orientation (Align to Real-World North) ---
     let deviceAlpha = 0;
+    let smoothedAlpha = 0;
+
     window.addEventListener('deviceorientation', (event) => {
-      if (orientMode && model) {
+      if (orientMode && modelGroup) {
         deviceAlpha = event.alpha || 0;
-        model.rotation.y = THREE.MathUtils.degToRad(-deviceAlpha);
+
+        // Smooth rotation
+        smoothedAlpha += (deviceAlpha - smoothedAlpha) * 0.1;
+
+        // Rotate model group to align with device heading
+        modelGroup.rotation.y = THREE.MathUtils.degToRad(-smoothedAlpha);
       }
     }, true);
 
@@ -105,11 +122,10 @@
       toggleBtn.innerText = orientMode ? 'Switch to Explore Mode' : 'Switch to Orient Mode';
     });
 
-    // --- Raycasting (Click to Recenter) ---
-    function onClick(event) {
+    // --- Recenter on Mouse Down ---
+    function onMouseDown(event) {
       if (!model) return;
 
-      // Normalize mouse position to -1..1 range
       mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
       mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
 
@@ -118,17 +134,12 @@
 
       if (intersects.length > 0) {
         const point = intersects[0].point;
-
-        // Animate the camera focus shift
-        new THREE.Vector3().lerpVectors(controls.target, point, 0.5);
         controls.target.copy(point);
         controls.update();
-
         console.log('Recentered to:', point);
       }
     }
-
-    window.addEventListener('click', onClick);
+    renderer.domElement.addEventListener('mousedown', onMouseDown);
 
     // --- Handle Resize ---
     window.addEventListener('resize', () => {
