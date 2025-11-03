@@ -80,7 +80,7 @@
         let lastAlpha = 0;
         let offset = 0;
         let hasInitial = false;
-        const INITIAL_CAMERA_DISTANCE = 5;
+        const INITIAL_CAMERA_DISTANCE = 10;
 
         // --- INITIALIZATION ---
 
@@ -237,7 +237,7 @@
             compassBtn.style.transform = `rotate(${smoothAlpha}deg)`;
 
             if (orientMode) {
-                const target = controls.target;
+                const target = controls.camera;
                 
                 // Use the camera's current distance to the target to maintain zoom
                 const currentDistance = camera.position.distanceTo(target);
