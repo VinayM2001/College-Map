@@ -50,14 +50,169 @@
     }
   </style>
 
-  <script type="importmap">
-    {
-      "imports": {
-        "three": "https://unpkg.com/three@0.165.0/build/three.module.js",
-        "three/examples/jsm/": "https://unpkg.com/three@0.165.0/examples/jsm/"
-      }
+<script type="module">
+  import * as THREE from 'three';
+  import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+  import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+
+  let scene, camera, renderer, controls;
+  let modelGroup = new THREE.Group();
+  let currentModel;
+  let orientMode = false;
+
+  let lastAlpha = 0, smoothAlpha = 0, offset = 0, hasInitial = false;
+
+  const raycaster = new THREE.Raycaster();
+  const mouse = new THREE.Vector2();
+
+  init();
+  animate();
+
+  function init() {
+    scene = new THREE.Scene();
+
+    // --- Camera ---
+    camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.set(5, 3, 5);
+
+    // --- Renderer ---
+    renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.shadowMap.enabled = true;
+    document.body.appendChild(renderer.domElement);
+
+    // --- Lighting ---
+    const ambient = new THREE.AmbientLight(0xffffff, 0.4);
+    scene.add(ambient);
+
+    const dirLight = new THREE.DirectionalLight(0xffffff, 1.4);
+    dirLight.position.set(10, 15, 10);
+    dirLight.castShadow = true;
+    dirLight.shadow.mapSize.set(2048, 2048);
+    scene.add(dirLight);
+
+    const fillLight = new THREE.DirectionalLight(0xffffff, 0.3);
+    fillLight.position.set(-10, 10, -10);
+    scene.add(fillLight);
+
+    // --- Controls ---
+    controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+    controls.maxPolarAngle = Math.PI * 0.95;
+    controls.target.set(0, 0, 0);
+
+    scene.add(modelGroup);
+    loadModel('Insti_map_Final.glb');
+
+    window.addEventListener('resize', onWindowResize);
+    document.getElementById('compassBtn').addEventListener('click', toggleMode);
+    window.addEventListener('deviceorientationabsolute', handleOrientation);
+    window.addEventListener('deviceorientation', handleOrientation);
+
+    // 🟢 Use pointerup instead of pointerdown for more accurate clicks
+    renderer.domElement.addEventListener('pointerup', onPointerUp);
+  }
+
+  // --- Load model ---
+  function loadModel(fileName) {
+    const loader = new GLTFLoader();
+    loader.load(fileName, (gltf) => {
+      if (currentModel) modelGroup.remove(currentModel);
+      currentModel = gltf.scene;
+
+      const box = new THREE.Box3().setFromObject(currentModel);
+      const center = box.getCenter(new THREE.Vector3());
+      currentModel.position.sub(center);
+
+      const size = box.getSize(new THREE.Vector3());
+      const scale = 3 / Math.max(size.x, size.y, size.z);
+      currentModel.scale.setScalar(scale);
+
+      modelGroup.add(currentModel);
+    });
+  }
+
+  // --- Handle tap to center ---
+  function onPointerUp(event) {
+    if (!currentModel) return;
+
+    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+    raycaster.setFromCamera(mouse, camera);
+    const intersects = raycaster.intersectObject(currentModel, true);
+
+    if (intersects.length > 0) {
+      const point = intersects[0].point.clone();
+
+      // Move modelGroup so that clicked point becomes new pivot at origin
+      modelGroup.position.sub(point);
+
+      // Set orbit target to the same point (now origin-relative)
+      controls.target.copy(new THREE.Vector3(0, 0, 0));
+      controls.update();
+
+      console.log("✅ Model recentered at:", point);
     }
-  </script>
+  }
+
+  // --- Orientation ---
+  function normalizeAngle(angle) {
+    angle = angle % 360;
+    if (angle < 0) angle += 360;
+    return angle;
+  }
+
+  function handleOrientation(e) {
+    const alpha = e.alpha;
+    if (alpha == null || !orientMode) return;
+
+    if (!hasInitial) {
+      offset = alpha;
+      hasInitial = true;
+    }
+
+    let diff = alpha - lastAlpha;
+    if (diff > 180) diff -= 360;
+    if (diff < -180) diff += 360;
+    lastAlpha += diff * 0.1;
+    smoothAlpha = normalizeAngle(lastAlpha - offset);
+
+    modelGroup.rotation.y = THREE.MathUtils.degToRad(-smoothAlpha);
+    document.getElementById('compassBtn').style.transform = `rotate(${smoothAlpha}deg)`;
+  }
+
+  // --- Toggle Explore/Orient mode ---
+  function toggleMode() {
+    orientMode = !orientMode;
+    hasInitial = false;
+
+    const compass = document.getElementById('compassBtn');
+    compass.style.background = orientMode ? 'rgba(255,100,100,0.8)' : 'rgba(0,0,0,0.6)';
+
+    // Disable horizontal rotation only when in orientation mode
+    controls.enableRotate = !orientMode;
+    controls.enablePan = !orientMode;
+    controls.enableZoom = true;
+  }
+
+  // --- Resize handler ---
+  function onWindowResize() {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  }
+
+  // --- Animation loop ---
+  function animate() {
+    requestAnimationFrame(animate);
+    controls.update();
+    renderer.render(scene, camera);
+  }
+</script>
+
 </head>
 <body>
 
