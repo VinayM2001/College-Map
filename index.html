@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>NID Campus 3D Map Viewer - Three.js Recenter</title>
+    <title>NID Campus 3D Map Viewer - Mobile Friendly</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
@@ -12,32 +12,35 @@
         #container { width: 100vw; height: 100vh; }
         .controls {
             position: absolute;
-            top: 30px;
-            left: 30px;
+            top: 15px;
+            left: 15px;
             display: flex;
             flex-direction: column;
-            gap: 20px;
+            gap: 15px;
             z-index: 5;
         }
+        /* Increased button size for better touch/Android experience */
         button {
             border: none;
-            border-radius: 20px;
-            padding: 20px 30px;
+            border-radius: 12px;
+            padding: 15px 20px;
             background: rgba(0,0,0,0.6);
             color: white;
             cursor: pointer;
-            font-size: 28px;
+            font-size: 16px;
+            min-width: 120px;
         }
         button:hover { background: rgba(0,0,0,0.8); }
         #compassBtn {
             position: absolute;
-            top: 30px;
-            right: 30px;
-            width: 100px; height: 100px;
+            top: 15px;
+            right: 15px;
+            width: 60px;
+            height: 60px;
             border-radius: 50%;
             background: rgba(0,0,0,0.6);
             color: white;
-            font-size: 48px;
+            font-size: 30px;
             display: flex; align-items: center; justify-content: center;
             cursor: pointer;
             transform: rotate(0deg);
@@ -72,12 +75,12 @@
         const raycaster = new THREE.Raycaster();
         const mouse = new THREE.Vector2();
 
-        // --- ORIENTATION VARIABLES (from original model-viewer code) ---
+        // --- ORIENTATION VARIABLES ---
         let orientMode = false;
         let lastAlpha = 0;
         let offset = 0;
         let hasInitial = false;
-        const CAMERA_DISTANCE = 10m; // Fixed distance (5m) from camera-orbit
+        const CAMERA_DISTANCE = 5;
 
         // --- INITIALIZATION ---
 
@@ -111,7 +114,7 @@
 
             // 5. Controls
             controls = new THREE.OrbitControls(camera, renderer.domElement);
-            controls.target.set(0, 0, 0); // Default center
+            controls.target.set(0, 0, 0);
             controls.enableZoom = true; 
             controls.enablePan = true;
             controls.update();
@@ -145,7 +148,7 @@
         }
 
         function loadModel(modelName) {
-            // Cleanup previous model
+            // Remove previous model from the scene
             if (currentModel) {
                 scene.remove(currentModel);
                 currentModel = null;
@@ -165,36 +168,31 @@
                     controls.update();
                 },
                 (xhr) => { console.log((xhr.loaded / xhr.total * 100).toFixed(0) + '% loaded'); },
-                (error) => { console.error('Error loading model:', error); }
+                (error) => { console.error('Error loading model. Check file path:', modelName, error); }
             );
         }
         
-        // --- RECENERING LOGIC (The core new feature) ---
+        // --- RECENERING LOGIC (Called by the 'click' event listener) ---
 
         function onCanvasClick(event) {
-            // Calculate mouse position in normalized device coordinates (-1 to +1)
             const rect = renderer.domElement.getBoundingClientRect();
             mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
             mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
             raycaster.setFromCamera(mouse, camera);
 
-            // Only check intersections if a model is loaded
             if (currentModel) {
-                // Check all parts of the current model recursively
                 const intersects = raycaster.intersectObjects(currentModel.children, true);
 
                 if (intersects.length > 0) {
                     const hitPoint = intersects[0].point;
-
-                    // Set the OrbitControls target to the clicked 3D point
                     controls.target.copy(hitPoint);
                     controls.update();
                 }
             }
         }
 
-        // --- CONTROL FUNCTIONS (from original HTML) ---
+        // --- BUTTON CONTROL FUNCTIONS (Needed because buttons use inline onclick) ---
 
         function setModel(modelName) {
             loadModel(modelName);
@@ -206,11 +204,11 @@
                 ? 'rgba(255, 100, 100, 0.8)'
                 : 'rgba(0, 0, 0, 0.6)';
             
-            // Disable standard orbit controls when in device orientation mode
+            // Disable standard orbit controls (pan/zoom/rotate) when in device orientation mode
             controls.enabled = !orientMode;
 
             if (orientMode) {
-                hasInitial = false; // Reset reference for smooth start
+                hasInitial = false; 
             }
         });
 
@@ -227,7 +225,6 @@
                 hasInitial = true;
             }
 
-            // Smoothing logic
             let diff = alpha - lastAlpha;
             if (diff > 180) diff -= 360;
             if (diff < -180) diff += 360;
@@ -238,29 +235,23 @@
             compassBtn.style.transform = `rotate(${smoothAlpha}deg)`;
 
             if (orientMode) {
-                // Convert compass angle (degrees) to yaw rotation (radians)
                 const yaw = THREE.MathUtils.degToRad(smoothAlpha);
-                
-                // Keep camera looking at the current controls.target, 
-                // but move it around the target based on the device's rotation.
-                
-                // Get the current target position
                 const target = controls.target;
                 
-                // Calculate the new camera position based on yaw and a fixed distance
-                const newX = target.x + CAMERA_DISTANCE * Math.sin(yaw);
-                const newZ = target.z + CAMERA_DISTANCE * Math.cos(yaw);
+                // Use the camera's current distance from the target (allows for zooming)
+                const currentDistance = camera.position.distanceTo(target);
+
+                const newX = target.x + currentDistance * Math.sin(yaw);
+                const newZ = target.z + currentDistance * Math.cos(yaw);
                 
-                // Apply the new position, keeping the height (y-coordinate)
                 camera.position.set(newX, camera.position.y, newZ);
                 
-                // Make the camera look at the target (essential for orientation mode)
+                // Force camera to look at the target center
                 camera.lookAt(target);
             }
         }
 
         function onDeviceOrientation(e) {
-            // e.alpha is the rotation around the Z axis (compass direction)
             if (e.alpha != null) smoothRotate(e.alpha);
         }
         
