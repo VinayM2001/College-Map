@@ -1,229 +1,69 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>NID Campus 3D Map (Three.js)</title>
-
+  <meta charset="UTF-8">
+  <title>NID Campus 3D Map</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
     body { margin: 0; overflow: hidden; background: transparent; }
     canvas { display: block; }
-
-    #floorControls {
-      position: absolute;
-      top: 15px;
-      left: 15px;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      z-index: 5;
-    }
-
-    button {
-      border: none;
-      border-radius: 10px;
-      padding: 10px 15px;
-      background: rgba(0,0,0,0.6);
-      color: white;
-      cursor: pointer;
-      font-size: 14px;
-    }
-    button:hover { background: rgba(0,0,0,0.8); }
-
     #compassBtn {
       position: absolute;
       top: 15px;
       right: 15px;
-      width: 50px;
-      height: 50px;
+      width: 48px;
+      height: 48px;
       border-radius: 50%;
       background: rgba(0, 0, 0, 0.6);
       color: white;
-      font-size: 24px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      font-size: 20px;
+      border: none;
       cursor: pointer;
-      transform: rotate(0deg);
-      transition: transform 0.3s ease;
       z-index: 10;
+      background-image: url('https://cdn-icons-png.flaticon.com/512/54/54461.png');
+      background-size: cover;
+      background-position: center;
+      transition: transform 0.3s ease, background 0.3s ease;
+    }
+    #floorSelector {
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 10px;
+      z-index: 10;
+    }
+    .floor-btn {
+      padding: 8px 12px;
+      background: rgba(0, 0, 0, 0.6);
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .floor-btn.active {
+      background: rgba(255, 100, 100, 0.8);
     }
   </style>
 
-<script type="module">
-  import * as THREE from 'three';
-  import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-  import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-
-  let scene, camera, renderer, controls;
-  let modelGroup = new THREE.Group();
-  let currentModel;
-  let orientMode = false;
-
-  let lastAlpha = 0, smoothAlpha = 0, offset = 0, hasInitial = false;
-
-  const raycaster = new THREE.Raycaster();
-  const mouse = new THREE.Vector2();
-
-  init();
-  animate();
-
-  function init() {
-    scene = new THREE.Scene();
-
-    // --- Camera ---
-    camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
-    camera.position.set(5, 3, 5);
-
-    // --- Renderer ---
-    renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setPixelRatio(window.devicePixelRatio);
-    renderer.shadowMap.enabled = true;
-    document.body.appendChild(renderer.domElement);
-
-    // --- Lighting ---
-    const ambient = new THREE.AmbientLight(0xffffff, 0.4);
-    scene.add(ambient);
-
-    const dirLight = new THREE.DirectionalLight(0xffffff, 1.4);
-    dirLight.position.set(10, 15, 10);
-    dirLight.castShadow = true;
-    dirLight.shadow.mapSize.set(2048, 2048);
-    scene.add(dirLight);
-
-    const fillLight = new THREE.DirectionalLight(0xffffff, 0.3);
-    fillLight.position.set(-10, 10, -10);
-    scene.add(fillLight);
-
-    // --- Controls ---
-    controls = new OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true;
-    controls.dampingFactor = 0.05;
-    controls.maxPolarAngle = Math.PI * 0.95;
-    controls.target.set(0, 0, 0);
-
-    scene.add(modelGroup);
-    loadModel('Insti_map_Final.glb');
-
-    window.addEventListener('resize', onWindowResize);
-    document.getElementById('compassBtn').addEventListener('click', toggleMode);
-    window.addEventListener('deviceorientationabsolute', handleOrientation);
-    window.addEventListener('deviceorientation', handleOrientation);
-
-    // 🟢 Use pointerup instead of pointerdown for more accurate clicks
-    renderer.domElement.addEventListener('pointerup', onPointerUp);
-  }
-
-  // --- Load model ---
-  function loadModel(fileName) {
-    const loader = new GLTFLoader();
-    loader.load(fileName, (gltf) => {
-      if (currentModel) modelGroup.remove(currentModel);
-      currentModel = gltf.scene;
-
-      const box = new THREE.Box3().setFromObject(currentModel);
-      const center = box.getCenter(new THREE.Vector3());
-      currentModel.position.sub(center);
-
-      const size = box.getSize(new THREE.Vector3());
-      const scale = 3 / Math.max(size.x, size.y, size.z);
-      currentModel.scale.setScalar(scale);
-
-      modelGroup.add(currentModel);
-    });
-  }
-
-  // --- Handle tap to center ---
-  function onPointerUp(event) {
-    if (!currentModel) return;
-
-    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-    mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
-
-    raycaster.setFromCamera(mouse, camera);
-    const intersects = raycaster.intersectObject(currentModel, true);
-
-    if (intersects.length > 0) {
-      const point = intersects[0].point.clone();
-
-      // Move modelGroup so that clicked point becomes new pivot at origin
-      modelGroup.position.sub(point);
-
-      // Set orbit target to the same point (now origin-relative)
-      controls.target.copy(new THREE.Vector3(0, 0, 0));
-      controls.update();
-
-      console.log("✅ Model recentered at:", point);
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.165.0/build/three.module.js",
+        "three/examples/jsm/": "https://unpkg.com/three@0.165.0/examples/jsm/"
+      }
     }
-  }
-
-  // --- Orientation ---
-  function normalizeAngle(angle) {
-    angle = angle % 360;
-    if (angle < 0) angle += 360;
-    return angle;
-  }
-
-  function handleOrientation(e) {
-    const alpha = e.alpha;
-    if (alpha == null || !orientMode) return;
-
-    if (!hasInitial) {
-      offset = alpha;
-      hasInitial = true;
-    }
-
-    let diff = alpha - lastAlpha;
-    if (diff > 180) diff -= 360;
-    if (diff < -180) diff += 360;
-    lastAlpha += diff * 0.1;
-    smoothAlpha = normalizeAngle(lastAlpha - offset);
-
-    modelGroup.rotation.y = THREE.MathUtils.degToRad(-smoothAlpha);
-    document.getElementById('compassBtn').style.transform = `rotate(${smoothAlpha}deg)`;
-  }
-
-  // --- Toggle Explore/Orient mode ---
-  function toggleMode() {
-    orientMode = !orientMode;
-    hasInitial = false;
-
-    const compass = document.getElementById('compassBtn');
-    compass.style.background = orientMode ? 'rgba(255,100,100,0.8)' : 'rgba(0,0,0,0.6)';
-
-    // Disable horizontal rotation only when in orientation mode
-    controls.enableRotate = !orientMode;
-    controls.enablePan = !orientMode;
-    controls.enableZoom = true;
-  }
-
-  // --- Resize handler ---
-  function onWindowResize() {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-  }
-
-  // --- Animation loop ---
-  function animate() {
-    requestAnimationFrame(animate);
-    controls.update();
-    renderer.render(scene, camera);
-  }
-</script>
-
+  </script>
 </head>
 <body>
-
-  <div id="floorControls">
-    <button onclick="loadModel('Insti_map_Final.glb')">Institute Map</button>
-    <button onclick="loadModel('G_floor_Final.glb')">Ground Floor</button>
-    <button onclick="loadModel('1st_floor_Final.glb')">1st Floor</button>
-    <button onclick="loadModel('2nd_floor_Final.glb')">2nd Floor</button>
+  <button id="compassBtn" title="Toggle Orientation"></button>
+  <div id="floorSelector">
+    <button class="floor-btn active" data-model="Insti_map_Final.glb">Campus</button>
+    <button class="floor-btn" data-model="G_floor_Final.glb">Ground</button>
+    <button class="floor-btn" data-model="1st_floor_Final.glb">1st</button>
+    <button class="floor-btn" data-model="2nd_floor_Final.glb">2nd</button>
   </div>
-
-  <div id="compassBtn">🧭</div>
 
   <script type="module">
     import * as THREE from 'three';
@@ -246,8 +86,8 @@
     function init() {
       scene = new THREE.Scene();
 
-      // --- Camera ---
-      camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
+      // --- Camera (50mm equiv) ---
+      camera = new THREE.PerspectiveCamera(39.6, window.innerWidth / window.innerHeight, 0.1, 1000);
       camera.position.set(5, 3, 5);
 
       // --- Renderer ---
@@ -258,18 +98,21 @@
       document.body.appendChild(renderer.domElement);
 
       // --- Lighting ---
-      const ambient = new THREE.AmbientLight(0xffffff, 0.4);
-      scene.add(ambient);
+      const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 1.0);
+      hemiLight.position.set(0, 50, 0);
+      scene.add(hemiLight);
 
-      const dirLight = new THREE.DirectionalLight(0xffffff, 1.4);
-      dirLight.position.set(10, 15, 10);
-      dirLight.castShadow = true;
-      dirLight.shadow.mapSize.set(2048, 2048);
-      scene.add(dirLight);
-
-      const fillLight = new THREE.DirectionalLight(0xffffff, 0.3);
-      fillLight.position.set(-10, 10, -10);
-      scene.add(fillLight);
+      const sunLight = new THREE.DirectionalLight(0xffffff, 2);
+      sunLight.position.set(10, 30, 10);
+      sunLight.castShadow = true;
+      sunLight.shadow.mapSize.set(4096, 4096);
+      sunLight.shadow.camera.near = 1;
+      sunLight.shadow.camera.far = 100;
+      sunLight.shadow.camera.left = -50;
+      sunLight.shadow.camera.right = 50;
+      sunLight.shadow.camera.top = 50;
+      sunLight.shadow.camera.bottom = -50;
+      scene.add(sunLight);
 
       // --- Controls ---
       controls = new OrbitControls(camera, renderer.domElement);
@@ -278,30 +121,30 @@
       controls.maxPolarAngle = Math.PI * 0.95;
       controls.target.set(0, 0, 0);
 
-      // --- Scene group ---
       scene.add(modelGroup);
-
-      // --- Load default model ---
       loadModel('Insti_map_Final.glb');
 
       // --- Events ---
       window.addEventListener('resize', onWindowResize);
       document.getElementById('compassBtn').addEventListener('click', toggleMode);
-
-      // Device orientation listeners
       window.addEventListener('deviceorientationabsolute', handleOrientation);
       window.addEventListener('deviceorientation', handleOrientation);
+      renderer.domElement.addEventListener('pointerup', onPointerUp);
 
-      // Tap event to recenter
-      renderer.domElement.addEventListener('pointerdown', onPointerDown);
+      document.querySelectorAll('.floor-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.floor-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          loadModel(btn.dataset.model);
+        });
+      });
     }
 
-    // --- Load model ---
+    // --- Load Model ---
     function loadModel(fileName) {
       const loader = new GLTFLoader();
       loader.load(fileName, (gltf) => {
         if (currentModel) modelGroup.remove(currentModel);
-
         currentModel = gltf.scene;
 
         // Center model properly
@@ -309,18 +152,18 @@
         const center = box.getCenter(new THREE.Vector3());
         currentModel.position.sub(center);
 
-        // Scale appropriately
         const size = box.getSize(new THREE.Vector3());
         const scale = 3 / Math.max(size.x, size.y, size.z);
         currentModel.scale.setScalar(scale);
 
-        // Add to group
+        modelGroup.position.set(0, 0, 0);
         modelGroup.add(currentModel);
+        console.log('✅ Loaded:', fileName);
       });
     }
 
-    // --- Handle tap to center ---
-    function onPointerDown(event) {
+    // --- Tap to center ---
+    function onPointerUp(event) {
       if (!currentModel) return;
 
       mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
@@ -330,20 +173,15 @@
       const intersects = raycaster.intersectObject(currentModel, true);
 
       if (intersects.length > 0) {
-        const point = intersects[0].point;
-
-        // Move camera focus
-        controls.target.copy(point);
-        controls.update();
-
-        // Move modelGroup so the tapped point becomes new rotation origin
+        const point = intersects[0].point.clone();
         modelGroup.position.sub(point);
-
-        console.log("Centered model on:", point);
+        controls.target.set(0, 0, 0);
+        controls.update();
+        console.log("🟢 Recentered at:", point);
       }
     }
 
-    // --- Device orientation handling ---
+    // --- Orientation (North alignment) ---
     function normalizeAngle(angle) {
       angle = angle % 360;
       if (angle < 0) angle += 360;
@@ -362,40 +200,4 @@
       let diff = alpha - lastAlpha;
       if (diff > 180) diff -= 360;
       if (diff < -180) diff += 360;
-      lastAlpha += diff * 0.1;
-      smoothAlpha = normalizeAngle(lastAlpha - offset);
-
-      modelGroup.rotation.y = THREE.MathUtils.degToRad(-smoothAlpha);
-      document.getElementById('compassBtn').style.transform = `rotate(${smoothAlpha}deg)`;
-    }
-
-    // --- Toggle mode ---
-    function toggleMode() {
-      orientMode = !orientMode;
-      hasInitial = false;
-
-      const compass = document.getElementById('compassBtn');
-      compass.style.background = orientMode ? 'rgba(255,100,100,0.8)' : 'rgba(0,0,0,0.6)';
-
-      // Disable/Enable horizontal rotation in orient mode
-      controls.enableRotate = !orientMode;
-      controls.enablePan = !orientMode;
-      controls.enableZoom = true; // always allow zoom
-    }
-
-    // --- Resize handler ---
-    function onWindowResize() {
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
-    }
-
-    // --- Animation loop ---
-    function animate() {
-      requestAnimationFrame(animate);
-      controls.update();
-      renderer.render(scene, camera);
-    }
-  </script>
-</body>
-</html>
+      lastAlpha +=
