@@ -3,7 +3,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
 const loader = new GLTFLoader();
 const modelGroup = new THREE.Group();
-let currentModel = Insti_map_Final.glb;
+let currentModel = null;
 
 function loadModel(path) {
   if (currentModel) modelGroup.remove(currentModel);
@@ -27,6 +27,6 @@ function loadModel(path) {
 }
 
 // Load the default model
-loadModel('Insti_map_Final.glb');
+loadModel('./assets/Insti_map_Final.glb');
 
 export { modelGroup, loadModel };
