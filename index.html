@@ -5,7 +5,7 @@
   <title>NID Campus 3D Map Viewer</title>
   <script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
   <style>
-    body { margin: 0; background: #e0e0e0; overflow: hidden; }
+    body { margin: 20px; background: #e0e0e0; overflow: hidden; }
     model-viewer { width: 100vw; height: 100vh; }
     .controls {
       position: absolute;
@@ -17,7 +17,7 @@
       z-index: 5;
     }
     button {
-      border: none;
+      border: 2px;
       border-radius: 10px;
       padding: 10px 15px;
       background: rgba(0,0,0,0.6);
@@ -51,7 +51,6 @@
     camera-orbit="0deg 75deg 5m"
     camera-target="auto"
     field-of-view="45deg"
-    auto-rotate
     exposure="1.2"
     shadow-intensity="1">
   </model-viewer>
