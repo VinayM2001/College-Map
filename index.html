@@ -69,7 +69,43 @@
         let currentModel = null;
         const INITIAL_MODEL = 'Insti_map_Final.glb';
 
-        function init() {
+     function onCanvasClick(event) {
+    // 1. Calculate mouse position in normalized device coordinates (-1 to +1)
+    const rect = renderer.domElement.getBoundingClientRect();
+    mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+    // 2. Update the picking ray with the camera and mouse position
+    raycaster.setFromCamera(mouse, camera);
+
+    // 3. Check for intersections against the loaded model (currentModel)
+    // We check against all children recursively (`true`)
+    if (currentModel) {
+        const intersects = raycaster.intersectObjects(currentModel.children, true);
+
+        if (intersects.length > 0) {
+            // The first intersection point is the closest one
+            const hitPoint = intersects[0].point;
+
+            // Log the new target coordinates for debugging
+            console.log(`Recenter to: (${hitPoint.x.toFixed(2)}, ${hitPoint.y.toFixed(2)}, ${hitPoint.z.toFixed(2)})`);
+
+            // 4. Set the new target for the OrbitControls
+            // This is the core step that recents the view.
+            controls.target.copy(hitPoint);
+            controls.update();
+        }
+    }
+}
+        
+        // --- NEW THREE.JS VARIABLES ---
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
+// ------------------------------
+
+        
+
+        function init() {       
             // 1. Scene
             scene = new THREE.Scene();
             scene.background = new THREE.Color(0xe0e0e0); // Matches the body background
@@ -78,6 +114,16 @@
             camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
             // camera-orbit="0deg 75deg 5m" -> camera is 5 units away, 75 degrees above the horizontal plane.
             camera.position.set(0, 2, 5); // Initial estimate; OrbitControls will manage the actual orbit
+            
+    // ... (previous setup code)
+
+    container.appendChild(renderer.domElement);
+
+    // --- NEW: Attach the click listener to the canvas ---
+    renderer.domElement.addEventListener('click', onCanvasClick, false);
+    // ----------------------------------------------------
+
+    // ... (rest of the init function)
 
             // 3. Renderer
             renderer = new THREE.WebGLRenderer({ antialias: true });
