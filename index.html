@@ -82,6 +82,9 @@
 
     let lastAlpha = 0, smoothAlpha = 0, offset = 0, hasInitial = false;
 
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+
     init();
     animate();
 
@@ -133,6 +136,9 @@
       // Device orientation listeners
       window.addEventListener('deviceorientationabsolute', handleOrientation);
       window.addEventListener('deviceorientation', handleOrientation);
+
+      // Tap event to recenter
+      renderer.domElement.addEventListener('pointerdown', onPointerDown);
     }
 
     // --- Load model ---
@@ -158,6 +164,30 @@
       });
     }
 
+    // --- Handle tap to center ---
+    function onPointerDown(event) {
+      if (!currentModel) return;
+
+      mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+      mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+      raycaster.setFromCamera(mouse, camera);
+      const intersects = raycaster.intersectObject(currentModel, true);
+
+      if (intersects.length > 0) {
+        const point = intersects[0].point;
+
+        // Move camera focus
+        controls.target.copy(point);
+        controls.update();
+
+        // Move modelGroup so the tapped point becomes new rotation origin
+        modelGroup.position.sub(point);
+
+        console.log("Centered model on:", point);
+      }
+    }
+
     // --- Device orientation handling ---
     function normalizeAngle(angle) {
       angle = angle % 360;
@@ -174,7 +204,6 @@
         hasInitial = true;
       }
 
-      // Handle wrap-around and smoothness
       let diff = alpha - lastAlpha;
       if (diff > 180) diff -= 360;
       if (diff < -180) diff += 360;
@@ -189,8 +218,14 @@
     function toggleMode() {
       orientMode = !orientMode;
       hasInitial = false;
+
       const compass = document.getElementById('compassBtn');
       compass.style.background = orientMode ? 'rgba(255,100,100,0.8)' : 'rgba(0,0,0,0.6)';
+
+      // Disable/Enable horizontal rotation in orient mode
+      controls.enableRotate = !orientMode;
+      controls.enablePan = !orientMode;
+      controls.enableZoom = true; // always allow zoom
     }
 
     // --- Resize handler ---
