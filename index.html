@@ -48,7 +48,7 @@
     src="Insti_map_Final.glb"
     alt="NID Campus Map"
     camera-controls
-    camera-orbit="0deg 75deg 5m"
+    camera-orbit="auto auto 5m"
     camera-target="auto"
     field-of-view="45deg"
     exposure="1.2"
@@ -85,7 +85,7 @@
         deviceAlpha = event.alpha || 0;
         smoothedAlpha += (deviceAlpha - smoothedAlpha) * 0.1;
         compassBtn.style.transform = `rotate(${smoothedAlpha}deg)`;
-        viewer.cameraOrbit = `${smoothedAlpha}deg 75deg 5m`;
+        viewer.cameraOrbit = `${smoothedAlpha}deg 35deg 5m`;
       }
     });
   </script>
