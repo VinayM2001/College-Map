@@ -1,175 +1,349 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>NID Campus 3D Map</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <style>
-    body { margin: 0; overflow: hidden; background: transparent; }
-    canvas { display: block; }
-
-    /* Compass toggle button */
-    #compassBtn {
-      position: absolute;
-      top: 15px;
-      right: 15px;
-      width: 50px;
-      height: 50px;
-      border-radius: 50%;
-      border: none;
-      background: radial-gradient(circle at center, #fff, #ddd);
-      box-shadow: 0 4px 8px rgba(0,0,0,0.25);
-      cursor: pointer;
-      z-index: 10;
-      background-image: url('https://upload.wikimedia.org/wikipedia/commons/2/27/Compass_rose_simple.svg');
-      background-size: cover;
-      background-position: center;
-      transition: transform 0.3s ease;
-    }
-
-    /* Floor selector */
-    #floorSelect {
-      position: absolute;
-      top: 80px;
-      right: 15px;
-      z-index: 10;
-      padding: 8px 10px;
-      border-radius: 10px;
-      background: rgba(255,255,255,0.8);
-      font-weight: bold;
-      border: none;
-      font-family: sans-serif;
-    }
-  </style>
-
-  <script type="importmap">
-    {
-      "imports": {
-        "three": "https://unpkg.com/three@0.165.0/build/three.module.js",
-        "three/examples/jsm/": "https://unpkg.com/three@0.165.0/examples/jsm/"
-      }
-    }
-  </script>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>NID Campus — Smooth Map (50mm feel)</title>
+<style>
+  html,body { height:100%; margin:0; background:transparent; -webkit-tap-highlight-color: transparent; }
+  canvas { display:block; }
+  /* UI */
+  #compassBtn{
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    width:54px; height:54px;
+    border-radius:50%;
+    border:none;
+    background:#fff;
+    background-image: url('https://upload.wikimedia.org/wikipedia/commons/2/27/Compass_rose_simple.svg');
+    background-size:60%;
+    background-repeat:no-repeat;
+    background-position:center;
+    box-shadow: 0 8px 18px rgba(0,0,0,0.25);
+    z-index: 20;
+    cursor:pointer;
+    transform-origin:center center;
+  }
+  #floorSelect{
+    position:absolute;
+    top:84px;
+    right:14px;
+    z-index:20;
+    padding:8px 10px;
+    border-radius:8px;
+    border:none;
+    background: rgba(255,255,255,0.95);
+    font-weight:600;
+  }
+  /* small helper text when needed */
+  #hint { position:absolute; left:14px; bottom:14px; z-index:20; color:#fff; background: rgba(0,0,0,0.45); padding:8px 10px; border-radius:8px; font-family:system-ui,Arial; font-size:13px;}
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.165.0/build/three.module.js",
+    "three/examples/jsm/": "https://unpkg.com/three@0.165.0/examples/jsm/"
+  }
+}
+</script>
 </head>
 <body>
-  <button id="compassBtn" title="Toggle Orientation"></button>
-  <select id="floorSelect">
-    <option value="Insti_map_Final.glb">Institute Map</option>
+  <button id="compassBtn" title="Toggle Orient/Explore (Compass)"></button>
+  <select id="floorSelect" aria-label="Choose floor">
+    <option value="Insti_map_Final.glb">Institute Map (Campus)</option>
     <option value="G_floor_Final.glb">Ground Floor</option>
     <option value="1st_floor_Final.glb">1st Floor</option>
     <option value="2nd_floor_Final.glb">2nd Floor</option>
   </select>
+  <div id="hint">Drag to orbit • Tap compass for Orient</div>
 
-  <script type="module">
-    import * as THREE from 'three';
-    import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-    import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
-    let scene, camera, renderer, controls, model, modelGroup;
-    let orientMode = false;
-    let deviceAlpha = 0;
-    let smoothedAlpha = 0;
+/* -------------------------
+   Config / state
+   ------------------------- */
+const MODEL_FILES = {
+  campus: 'Insti_map_Final.glb',
+  ground: 'G_floor_Final.glb',
+  first: '1st_floor_Final.glb',
+  second: '2nd_floor_Final.glb'
+};
 
-    init();
-    animate();
+let orientMode = false;           // whether device-orientation mode is active
+let isUserInteracting = false;    // pointer/touch down
+let targetRotationRad = 0;        // desired rotation from device heading (radians)
+let smoothRotationRad = 0;        // smoothed applied rotation
+let rotationLerp = 0.10;          // smoothing factor (0..1) (lower = smoother)
+let smoothTargetLerp = 0.12;      // smoothing for controls.target transitions
 
-    function init() {
-      // Scene
-      scene = new THREE.Scene();
+/* -------------------------
+   Basic THREE setup
+   ------------------------- */
+const scene = new THREE.Scene();
 
-      // Camera
-      camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
-      camera.position.set(4, 3, 4);
+const camera = new THREE.PerspectiveCamera(39, window.innerWidth/window.innerHeight, 0.05, 2000);
+// 50mm-ish look -> fov ~39 deg
+camera.position.set(4, 2.6, 6);
 
-      // Renderer
-      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-      renderer.setSize(window.innerWidth, window.innerHeight);
-      renderer.setPixelRatio(window.devicePixelRatio);
-      document.body.appendChild(renderer.domElement);
+const renderer = new THREE.WebGLRenderer({ antialias:true, alpha:true });
+renderer.setPixelRatio(window.devicePixelRatio || 1);
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.outputEncoding = THREE.sRGBEncoding;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+document.body.appendChild(renderer.domElement);
 
-      // Lighting
-      const hemiLight = new THREE.HemisphereLight(0xffffff, 0x888888, 1.3);
-      scene.add(hemiLight);
+/* -------------------------
+   Lighting (good sun + soft shadows)
+   ------------------------- */
+// Hemisphere for general fill
+const hemi = new THREE.HemisphereLight(0xffffff, 0x8888aa, 0.9);
+scene.add(hemi);
 
-      const dirLight = new THREE.DirectionalLight(0xffffff, 2.5);
-      dirLight.position.set(5, 10, 7);
-      dirLight.castShadow = true;
-      dirLight.shadow.mapSize.set(2048, 2048);
-      scene.add(dirLight);
+// Directional "sun" with strong soft shadows
+const sun = new THREE.DirectionalLight(0xffffff, 2.0);
+sun.position.set(12, 30, 12);
+sun.castShadow = true;
+sun.shadow.mapSize.set(4096, 4096);
+const d = 25;
+sun.shadow.camera.left = -d;
+sun.shadow.camera.right = d;
+sun.shadow.camera.top = d;
+sun.shadow.camera.bottom = -d;
+sun.shadow.camera.near = 0.5;
+sun.shadow.camera.far = 200;
+sun.shadow.bias = -0.0005;
+scene.add(sun);
 
-      // Model Group
-      modelGroup = new THREE.Group();
-      scene.add(modelGroup);
+// Small fill to reduce hard contrast
+const fill = new THREE.DirectionalLight(0xffffff, 0.35);
+fill.position.set(-10, 8, -8);
+scene.add(fill);
 
-      // Controls
-      controls = new OrbitControls(camera, renderer.domElement);
-      controls.enableDamping = true;
-      controls.dampingFactor = 0.05;
-      controls.maxPolarAngle = Math.PI * 0.9;
+/* -------------------------
+   Controls
+   ------------------------- */
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.09;        // smoother damping
+controls.screenSpacePanning = false;
+controls.minDistance = 0.8;
+controls.maxDistance = 30;
+controls.maxPolarAngle = Math.PI * 0.92;
 
-      // Load default model
-      loadModel('INSTITUTE MAP.glb');
+/* -------------------------
+   Model group - pivot at origin
+   ------------------------- */
+const modelGroup = new THREE.Group();
+scene.add(modelGroup);
 
-      // Handle floor change
-      document.getElementById('floorSelect').addEventListener('change', (e) => {
-        loadModel(e.target.value);
-      });
+let currentModel = null; // reference to the loaded model root (gltf.scene)
 
-      // Compass toggle
-      const compassBtn = document.getElementById('compassBtn');
-      compassBtn.addEventListener('click', () => {
-        orientMode = !orientMode;
-        compassBtn.style.filter = orientMode ? 'drop-shadow(0 0 10px red)' : 'none';
-      });
+/* -------------------------
+   Helpers: load + center model
+   ------------------------- */
+const gltfLoader = new GLTFLoader();
 
-      // Device orientation event
-      window.addEventListener('deviceorientation', (event) => {
-        if (orientMode && modelGroup) {
-          deviceAlpha = event.alpha || 0;
-          smoothedAlpha += (deviceAlpha - smoothedAlpha) * 0.1;
-          modelGroup.rotation.y = THREE.MathUtils.degToRad(-smoothedAlpha);
+async function loadAndCenterModel(url) {
+  // remove previous
+  if (currentModel) {
+    modelGroup.remove(currentModel);
+    // dispose previous geometry/material where possible to free GPU (optional)
+    currentModel.traverse((o)=> {
+      if (o.isMesh) {
+        o.geometry?.dispose?.();
+        if (o.material) {
+          if (Array.isArray(o.material)) o.material.forEach(m=>m.dispose?.());
+          else o.material.dispose?.();
         }
-      });
+      }
+    });
+    currentModel = null;
+  }
 
-      // Resize handling
-      window.addEventListener('resize', () => {
-        camera.aspect = window.innerWidth / window.innerHeight;
-        camera.updateProjectionMatrix();
-        renderer.setSize(window.innerWidth, window.innerHeight);
-      });
-    }
+  return new Promise((resolve, reject) => {
+    gltfLoader.load(url, (gltf) => {
+      const root = gltf.scene;
 
-    // Load model function
-    function loadModel(path) {
-      const loader = new GLTFLoader();
-      loader.load(path, (gltf) => {
-        if (modelGroup.children.length > 0) modelGroup.remove(modelGroup.children[0]);
-        model = gltf.scene;
+      // compute bounding box in root's local space
+      const box = new THREE.Box3().setFromObject(root);
+      const center = box.getCenter(new THREE.Vector3());
+      const size = box.getSize(new THREE.Vector3());
+      // translate model so its geometric center is at origin (within the group)
+      root.position.x -= center.x;
+      root.position.y -= center.y;
+      root.position.z -= center.z;
 
-        // Center model
-        const box = new THREE.Box3().setFromObject(model);
-        const center = box.getCenter(new THREE.Vector3());
-        model.position.sub(center);
+      // scale model to reasonable size (uniform)
+      const maxDim = Math.max(size.x, size.y, size.z);
+      const desired = 3.0; // target size
+      if (maxDim > 0) {
+        const s = desired / maxDim;
+        root.scale.setScalar(s);
+      }
 
-        // Scale to a consistent size
-        const size = box.getSize(new THREE.Vector3());
-        const scale = 3 / Math.max(size.x, size.y, size.z);
-        model.scale.setScalar(scale);
+      // ensure matrices up-to-date
+      root.updateMatrixWorld(true);
 
-        modelGroup.add(model);
-        controls.target.set(0, 0, 0);
-        controls.update();
+      currentModel = root;
+      modelGroup.add(currentModel);
 
-        console.log(`Loaded ${path}`);
-      });
-    }
+      // after adding, set controls target smoothly to world origin (0,0,0)
+      // but do it smoothly using a small animation (we'll use smoothing in loop)
+      controlTargetTarget.set(0,0,0);
 
-    // Animation loop
-    function animate() {
-      requestAnimationFrame(animate);
-      controls.update();
-      renderer.render(scene, camera);
-    }
-  </script>
+      resolve(root);
+    }, undefined, reject);
+  });
+}
+
+/* -------------------------
+   Smoothly changing controls.target
+   ------------------------- */
+const controlTargetTarget = new THREE.Vector3(0,0,0); // where we want the controls.target to go
+function setControlTargetSmooth(v3) {
+  controlTargetTarget.copy(v3);
+}
+
+/* -------------------------
+   Pointer interaction detection (pause orientation while user interacts)
+   ------------------------- */
+function onPointerDown() { isUserInteracting = true; }
+function onPointerUp()   { isUserInteracting = false; }
+renderer.domElement.addEventListener('pointerdown', onPointerDown, {passive:true});
+window.addEventListener('pointerup', onPointerUp, {passive:true});
+renderer.domElement.addEventListener('touchstart', onPointerDown, {passive:true});
+window.addEventListener('touchend', onPointerUp, {passive:true});
+
+/* -------------------------
+   Device orientation handling (true north)
+   ------------------------- */
+function handleDeviceOrientation(e) {
+  // alpha is compass heading relative to device
+  // sometimes alpha is null; we guard
+  if (typeof e.alpha === 'number') {
+    // device heading in degrees
+    targetRotationRad = THREE.MathUtils.degToRad(-e.alpha);
+  }
+}
+window.addEventListener('deviceorientationabsolute' , handleDeviceOrientation, true);
+window.addEventListener('deviceorientation' , handleDeviceOrientation, true);
+
+/* -------------------------
+   Recenter on mousedown (raycast)
+   ------------------------- */
+const raycaster = new THREE.Raycaster();
+const pointer = new THREE.Vector2();
+
+renderer.domElement.addEventListener('mousedown', (ev) => {
+  if (!currentModel) return;
+  // compute normalized device coordinates
+  pointer.x = (ev.clientX / window.innerWidth) * 2 - 1;
+  pointer.y = -(ev.clientY / window.innerHeight) * 2 + 1;
+  raycaster.setFromCamera(pointer, camera);
+  const hits = raycaster.intersectObject(currentModel, true);
+  if (hits.length > 0) {
+    const p = hits[0].point.clone();
+    // shift modelGroup so that clicked point becomes modelGroup origin (0,0,0)
+    // We must move modelGroup's position by +p in world-space relative to group.
+    // Convert p (world) into group's local:
+    // Since modelGroup is at origin, p is in world coordinates; we simply translate modelGroup by p.
+    // BUT to make clicked point become origin, we move group by -p.
+    modelGroup.position.x -= p.x;
+    modelGroup.position.y -= p.y;
+    modelGroup.position.z -= p.z;
+
+    // After shifting pivot, also update controls target smoothly to 0,0,0
+    setControlTargetSmooth(new THREE.Vector3(0,0,0));
+  }
+}, {passive:true});
+
+/* -------------------------
+   Compass toggle UI
+   ------------------------- */
+const compassBtn = document.getElementById('compassBtn');
+compassBtn.addEventListener('click', ()=> {
+  orientMode = !orientMode;
+  compassBtn.style.filter = orientMode ? 'drop-shadow(0 0 10px rgba(255,0,0,0.8))' : 'none';
+});
+
+/* -------------------------
+   Floor selector UI
+   ------------------------- */
+const floorSelect = document.getElementById('floorSelect');
+floorSelect.addEventListener('change', async (e) => {
+  const val = e.target.value;
+  await loadAndCenterModel(val);
+  // reset group rotation smoothly to current targetRotationRad (so north remains consistent)
+  // (no immediate jump)
+});
+
+/* -------------------------
+   Initial load (campus)
+   ------------------------- */
+(async ()=> {
+  // Try to load the default - if missing it will throw in console
+  await loadAndCenterModel(MODEL_FILES.campus);
+})();
+
+/* -------------------------
+   Resize handling
+   ------------------------- */
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth/window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+/* -------------------------
+   Animation loop with smoothing
+   ------------------------- */
+function animate() {
+  requestAnimationFrame(animate);
+
+  // 1) Smooth controls.target move -> lerp to controlTargetTarget
+  controls.target.lerp(controlTargetTarget, smoothTargetLerp);
+
+  // 2) Orientation smoothing: only apply when orientMode && not interacting
+  if (orientMode && !isUserInteracting && modelGroup) {
+    // targetRotationRad updated by deviceorientation handler
+    // We lerp the smoothedRotation toward targetRotationRad
+    const delta = shortestAngleDiff(smoothedAlphaToDeg(smoothRotationRad), smoothAlphaToDeg(targetRotationRad)); // not used, keep simple
+    smoothRotationRad += (targetRotationRad - smoothRotationRad) * rotationLerp;
+    // apply smoothed rotation to group
+    modelGroup.rotation.y = smoothRotationRad;
+    // rotate compass icon visually to reflect heading (optional; rotate to -deg to match map)
+    const deg = -THREE.MathUtils.radToDeg(smoothRotationRad);
+    compassBtn.style.transform = `rotate(${deg}deg)`;
+  } else {
+    // if in explore mode or interacting, we still slowly keep compass visual stable (don't snap)
+    // no change to modelGroup.rotation
+  }
+
+  controls.update();
+  renderer.render(scene, camera);
+}
+animate();
+
+/* -------------------------
+   Utilities
+   ------------------------- */
+// shortest angle diff helper (not strictly needed here but kept for completeness)
+function shortestAngleDiff(aDeg, bDeg) {
+  let diff = bDeg - aDeg;
+  while (diff > 180) diff -= 360;
+  while (diff < -180) diff += 360;
+  return diff;
+}
+function smoothAlphaToDeg(rad) { return THREE.MathUtils.radToDeg(rad); }
+function smoothRotationToRad(deg) { return THREE.MathUtils.degToRad(deg); }
+// small helpers to avoid unused warnings
+function smoothAlphaToDegUnused(a) { return a; }
+
+</script>
 </body>
 </html>
