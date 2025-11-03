@@ -23,14 +23,14 @@
       background: rgba(0,0,0,0.6);
       color: white;
       cursor: pointer;
-      font-size: 14px;
+      font-size: 30px;
     }
     button:hover { background: rgba(0,0,0,0.8); }
     #compassBtn {
       position: absolute;
-      top: 15px;
-      right: 15px;
-      width: 50px; height: 50px;
+      top: 30px;
+      right: 30px;
+      width: 100px; height: 100px;
       border-radius: 50%;
       background: rgba(0,0,0,0.6);
       color: white;
@@ -85,7 +85,7 @@
         deviceAlpha = event.alpha || 0;
         smoothedAlpha += (deviceAlpha - smoothedAlpha) * 0.1;
         compassBtn.style.transform = `rotate(${smoothedAlpha}deg)`;
-        viewer.cameraOrbit = `${smoothedAlpha}deg 35deg 5m`;
+        viewer.cameraOrbit = `${smoothedAlpha}deg 90deg 5m`;
       }
     });
   </script>
