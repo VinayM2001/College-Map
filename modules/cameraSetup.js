@@ -10,7 +10,7 @@ controls.enableDamping = true;
 controls.dampingFactor = 0.05;
 
 // Adjust zoom range (distance)
-controls.minDistance = 2;
+controls.minDistance = 0.5;
 controls.maxDistance = 10;
 
 // Limit vertical angle
