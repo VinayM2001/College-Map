@@ -12,32 +12,32 @@
         #container { width: 100vw; height: 100vh; }
         .controls {
             position: absolute;
-            top: 15px;
-            left: 15px;
+            top: 30px;
+            left: 30px;
             display: flex;
             flex-direction: column;
-            gap: 10px;
+            gap: 20px;
             z-index: 5;
         }
         button {
             border: none;
-            border-radius: 10px;
-            padding: 10px 15px;
+            border-radius: 20px;
+            padding: 20px 30px;
             background: rgba(0,0,0,0.6);
             color: white;
             cursor: pointer;
-            font-size: 14px;
+            font-size: 28px;
         }
         button:hover { background: rgba(0,0,0,0.8); }
         #compassBtn {
             position: absolute;
-            top: 15px;
-            right: 15px;
-            width: 50px; height: 50px;
+            top: 30px;
+            right: 30px;
+            width: 100px; height: 100px;
             border-radius: 50%;
             background: rgba(0,0,0,0.6);
             color: white;
-            font-size: 24px;
+            font-size: 48px;
             display: flex; align-items: center; justify-content: center;
             cursor: pointer;
             transform: rotate(0deg);
@@ -77,7 +77,7 @@
         let lastAlpha = 0;
         let offset = 0;
         let hasInitial = false;
-        const CAMERA_DISTANCE = 5; // Fixed distance (5m) from camera-orbit
+        const CAMERA_DISTANCE = 10m; // Fixed distance (5m) from camera-orbit
 
         // --- INITIALIZATION ---
 
@@ -112,7 +112,7 @@
             // 5. Controls
             controls = new THREE.OrbitControls(camera, renderer.domElement);
             controls.target.set(0, 0, 0); // Default center
-            controls.enableZoom = false; 
+            controls.enableZoom = true; 
             controls.enablePan = true;
             controls.update();
 
