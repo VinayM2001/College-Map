@@ -5,19 +5,8 @@
   <title>NID Campus 3D Map Viewer</title>
   <script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
   <style>
-    body {
-      margin: 0;
-      background-color: #f4f4f4;
-      overflow: hidden;
-      font-family: system-ui, sans-serif;
-    }
-
-    model-viewer {
-      width: 100vw;
-      height: 100vh;
-      background-color: #e0e0e0;
-    }
-
+    body { margin: 0; background: #e0e0e0; overflow: hidden; }
+    model-viewer { width: 100vw; height: 100vh; }
     .controls {
       position: absolute;
       top: 15px;
@@ -27,36 +16,26 @@
       gap: 10px;
       z-index: 5;
     }
-
     button {
       border: none;
       border-radius: 10px;
       padding: 10px 15px;
-      background: rgba(0, 0, 0, 0.6);
+      background: rgba(0,0,0,0.6);
       color: white;
       cursor: pointer;
       font-size: 14px;
-      transition: 0.3s;
     }
-
-    button:hover {
-      background: rgba(0, 0, 0, 0.8);
-    }
-
+    button:hover { background: rgba(0,0,0,0.8); }
     #compassBtn {
       position: absolute;
       top: 15px;
       right: 15px;
-      width: 50px;
-      height: 50px;
+      width: 50px; height: 50px;
       border-radius: 50%;
-      background: rgba(0, 0, 0, 0.6);
+      background: rgba(0,0,0,0.6);
       color: white;
       font-size: 24px;
-      font-weight: bold;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      display: flex; align-items: center; justify-content: center;
       cursor: pointer;
       transform: rotate(0deg);
       transition: transform 0.5s ease;
@@ -65,21 +44,18 @@
 </head>
 <body>
 
-  <!-- 3D Model Viewer -->
-  <model-viewer id="campusViewer" 
+  <model-viewer id="campusViewer"
     src="Insti_map_Final.glb"
     alt="NID Campus Map"
     camera-controls
-    interaction-prompt="none"
+    camera-orbit="0deg 75deg 5m"
+    camera-target="auto"
+    field-of-view="45deg"
     auto-rotate
-    rotation-per-second="30deg"
-    ar
-    disable-zoom
-    exposure="1"
+    exposure="1.2"
     shadow-intensity="1">
   </model-viewer>
 
-  <!-- Floor Buttons -->
   <div class="controls">
     <button onclick="setModel('Insti_map_Final.glb')">Institute Map</button>
     <button onclick="setModel('G_floor_Final.glb')">Ground Floor</button>
@@ -87,39 +63,30 @@
     <button onclick="setModel('2nd_floor_Final.glb')">2nd Floor</button>
   </div>
 
-  <!-- Compass Button -->
   <div id="compassBtn">🧭</div>
 
   <script>
     const viewer = document.getElementById('campusViewer');
     const compassBtn = document.getElementById('compassBtn');
-
     let orientMode = false;
     let deviceAlpha = 0;
     let smoothedAlpha = 0;
 
-    // --- Change model function ---
     function setModel(modelName) {
       viewer.src = modelName;
     }
 
-    // --- Compass / Orientation toggle ---
     compassBtn.addEventListener('click', () => {
       orientMode = !orientMode;
       compassBtn.style.background = orientMode ? 'rgba(255, 100, 100, 0.8)' : 'rgba(0, 0, 0, 0.6)';
     });
 
-    // --- Device Orientation ---
     window.addEventListener('deviceorientation', (event) => {
       if (orientMode) {
         deviceAlpha = event.alpha || 0;
         smoothedAlpha += (deviceAlpha - smoothedAlpha) * 0.1;
-
-        // Rotate the compass icon
         compassBtn.style.transform = `rotate(${smoothedAlpha}deg)`;
-
-        // Adjust camera orbit
-        viewer.cameraOrbit = `${smoothedAlpha}deg 75deg auto`;
+        viewer.cameraOrbit = `${smoothedAlpha}deg 75deg 5m`;
       }
     });
   </script>
