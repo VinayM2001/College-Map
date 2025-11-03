@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>NID Campus 3D Map Viewer - Mobile Friendly</title>
+    <title>NID Campus 3D Map Viewer - Final Version</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
@@ -80,7 +80,7 @@
         let lastAlpha = 0;
         let offset = 0;
         let hasInitial = false;
-        const CAMERA_DISTANCE = 5;
+        const INITIAL_CAMERA_DISTANCE = 5;
 
         // --- INITIALIZATION ---
 
@@ -92,7 +92,7 @@
             // 2. Camera
             const aspect = window.innerWidth / window.innerHeight;
             camera = new THREE.PerspectiveCamera(45, aspect, 0.1, 1000);
-            camera.position.set(0, 2, CAMERA_DISTANCE); 
+            camera.position.set(0, 2, INITIAL_CAMERA_DISTANCE); 
 
             // 3. Renderer
             renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -112,7 +112,7 @@
             directionalLight.castShadow = true;
             scene.add(directionalLight);
 
-            // 5. Controls
+            // 5. Controls (Zoom and Pan Enabled)
             controls = new THREE.OrbitControls(camera, renderer.domElement);
             controls.target.set(0, 0, 0);
             controls.enableZoom = true; 
@@ -172,7 +172,7 @@
             );
         }
         
-        // --- RECENERING LOGIC (Called by the 'click' event listener) ---
+        // --- RECENERING LOGIC (Sets controls.target where user clicks) ---
 
         function onCanvasClick(event) {
             const rect = renderer.domElement.getBoundingClientRect();
@@ -192,8 +192,9 @@
             }
         }
 
-        // --- BUTTON CONTROL FUNCTIONS (Needed because buttons use inline onclick) ---
+        // --- BUTTON CONTROL FUNCTIONS ---
 
+        // Function called by the HTML buttons
         function setModel(modelName) {
             loadModel(modelName);
         }
@@ -222,6 +223,7 @@
         function smoothRotate(alpha) {
             if (!hasInitial) {
                 offset = alpha;
+                lastAlpha = alpha;
                 hasInitial = true;
             }
 
@@ -235,15 +237,20 @@
             compassBtn.style.transform = `rotate(${smoothAlpha}deg)`;
 
             if (orientMode) {
-                const yaw = THREE.MathUtils.degToRad(smoothAlpha);
                 const target = controls.target;
                 
-                // Use the camera's current distance from the target (allows for zooming)
+                // Use the camera's current distance to the target to maintain zoom
                 const currentDistance = camera.position.distanceTo(target);
 
-                const newX = target.x + currentDistance * Math.sin(yaw);
-                const newZ = target.z + currentDistance * Math.cos(yaw);
+                // Convert compass angle (degrees) to yaw rotation (radians)
+                // Added +90 offset to align compass North with the 3D world's forward axis
+                const yaw = THREE.MathUtils.degToRad(smoothAlpha + 90);
                 
+                // Calculate the new camera position around the target
+                const newX = target.x + currentDistance * Math.cos(yaw);
+                const newZ = target.z + currentDistance * Math.sin(yaw);
+                
+                // Apply the new position, maintaining the current camera height (Y)
                 camera.position.set(newX, camera.position.y, newZ);
                 
                 // Force camera to look at the target center
