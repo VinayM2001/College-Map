@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { camera, controls } from './cameraSetup.js';
+import { getCurrentModel } from './modelLoader.js';
 
 function setupUI(loadModel, toggleOrientationMode) {
   const compassBtn = document.getElementById('compassBtn');
@@ -7,8 +8,6 @@ function setupUI(loadModel, toggleOrientationMode) {
   const rendererDom = document.querySelector('canvas');
   const raycaster = new THREE.Raycaster();
   const mouse = new THREE.Vector2();
-
-  let currentModel = null;
 
   // Floor selector
   floorSelector.addEventListener('change', (e) => {
@@ -27,8 +26,9 @@ function setupUI(loadModel, toggleOrientationMode) {
     mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
 
     raycaster.setFromCamera(mouse, camera);
-    if (currentModel) {
-      const intersects = raycaster.intersectObject(currentModel, true);
+    const model = getCurrentModel();
+    if (model) {
+      const intersects = raycaster.intersectObject(model, true);
       if (intersects.length > 0) {
         const point = intersects[0].point;
         controls.target.copy(point);

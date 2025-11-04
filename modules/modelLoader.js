@@ -8,7 +8,7 @@ let currentModel = null;
 function loadModel(path) {
   if (currentModel) modelGroup.remove(currentModel);
 
-  loader.load(`./assets/${path}`, (gltf) => {
+  loader.load(`assets/${path}`, (gltf) => {
     const model = gltf.scene;
 
     // Center the model
@@ -27,6 +27,6 @@ function loadModel(path) {
 }
 
 // Load the default model
-loadModel('./assets/Insti_map_Final.glb');
+loadModel('Insti_map_Final.glb');
 
-export { modelGroup, loadModel };
+export { modelGroup, loadModel, getCurrentModel: () => currentModel };
