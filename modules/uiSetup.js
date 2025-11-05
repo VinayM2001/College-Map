@@ -1,3 +1,5 @@
+import * as THREE from 'three';
+
 export function setupUI(scene, camera, controls, loadModel) {
   document.querySelectorAll('#floorBtns button').forEach(btn => {
     btn.addEventListener('click', () => {
