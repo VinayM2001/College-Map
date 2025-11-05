@@ -1,9 +1,10 @@
 import * as THREE from 'three';
 
 export const scene = new THREE.Scene();
-export const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+scene.background = null;
 
-renderer.setSize(window.innerWidth, window.innerHeight);
+export const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
 renderer.setPixelRatio(window.devicePixelRatio);
+renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
 document.body.appendChild(renderer.domElement);
