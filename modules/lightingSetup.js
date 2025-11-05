@@ -6,7 +6,7 @@ export function addLights(scene) {
   scene.add(hemi);
 
   const sun = new THREE.DirectionalLight(0xffffff, 2);
-  sun.position.set(10, 20, 10);
+  sun.position.set(10, 19, 10);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
   scene.add(sun);
