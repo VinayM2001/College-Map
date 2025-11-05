@@ -1,4 +1,4 @@
-export function setupUI(scene, camera, controls, loadModel, centerModel) {
+export function setupUI(scene, camera, controls, loadModel) {
   document.querySelectorAll('#floorBtns button').forEach(btn => {
     btn.addEventListener('click', () => {
       const modelName = btn.getAttribute('data-model');
@@ -6,7 +6,7 @@ export function setupUI(scene, camera, controls, loadModel, centerModel) {
     });
   });
 
-  // Recenter when user taps
+  // Raycast click recenter
   const raycaster = new THREE.Raycaster();
   const mouse = new THREE.Vector2();
 
@@ -15,6 +15,9 @@ export function setupUI(scene, camera, controls, loadModel, centerModel) {
     mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
     raycaster.setFromCamera(mouse, camera);
     const intersects = raycaster.intersectObjects(scene.children, true);
-    if (intersects.length > 0) centerModel(intersects[0].point, controls);
+    if (intersects.length > 0) {
+      controls.target.copy(intersects[0].point);
+      controls.update();
+    }
   });
 }
