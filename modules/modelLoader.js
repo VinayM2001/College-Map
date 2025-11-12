@@ -6,7 +6,7 @@ let currentModel = null;
 
 export function loadModel(scene, modelName) {
   const loader = new GLTFLoader();
-  const path = `./assets/${modelName}`;
+  const path = './assets/${modelName}';
 
   if (modelGroup) scene.remove(modelGroup);
   modelGroup = new THREE.Group();
