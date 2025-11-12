@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 
 export function initGeoLocation(scene) {
-  const markerGeometry = new THREE.SphereGeometry(0.05, 16, 16);
-  const markerMaterial = new THREE.MeshStandardMaterial({ color: 0x00ff00 });
+  const markerGeometry = new THREE.SphereGeometry(0.05, 16, 2, 1.72787595947439, 4.73752172161341, 1.5707963267949, 6.283185307179586);
+  const markerMaterial = new THREE.MeshStandardMaterial({ color: 0xDE0000 });
   const marker = new THREE.Mesh(markerGeometry, markerMaterial);
   scene.add(marker);
 
