@@ -1,23 +1,30 @@
-import * as THREE from 'three';
+import * as THREE from "three";
 
-export function setupDeviceOrientation(scene) {
-  let modelGroup = scene.children.find(obj => obj.isGroup);
-  let deviceAlpha = 0;
-  let smoothedAlpha = 0;
-  let orientMode = false;
+let enabled = false;
+let targetRotation = 0;
+let currentRotation = 0;
+let pivot = new THREE.Vector3();
 
-  const compassBtn = document.getElementById('compassBtn');
-  compassBtn.addEventListener('click', () => {
-    orientMode = !orientMode;
-    compassBtn.style.transform = orientMode ? 'rotate(45deg)' : 'rotate(0deg)';
-  });
+export function enableOrientation(state) {
+    enabled = state;
+}
 
-  window.addEventListener('deviceorientation', (event) => {
-    if (!orientMode || !modelGroup) return;
+export function setPivot(point) {
+    pivot.copy(point);
+}
 
-    deviceAlpha = event.alpha || 0;
-    smoothedAlpha += (deviceAlpha - smoothedAlpha) * 0.1;
+export function updateOrientation(model) {
+    if (!enabled || !model) return;
 
-    modelGroup.rotation.y = THREE.MathUtils.degToRad(-smoothedAlpha);
-  });
+    window.addEventListener("deviceorientation", (e) => {
+        // Rotation in radians (smooth)
+        targetRotation = THREE.MathUtils.degToRad(e.alpha);
+    });
+
+    // Smooth follow
+    currentRotation += (targetRotation - currentRotation) * 0.06;
+
+    model.position.sub(pivot);
+    model.rotation.y = currentRotation;
+    model.position.add(pivot);
 }
