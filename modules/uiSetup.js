@@ -1,11 +1,17 @@
 import * as THREE from 'three';
 
 export function setupUI(loadModel) {
+
     function selectButton(activeBtn) {
         const buttons = document.querySelectorAll('.ui-button');
         buttons.forEach(btn => btn.classList.remove('selected'));
         activeBtn.classList.add('selected');
     }
+
+    document.getElementById('instiButton').addEventListener('click', () => {
+        loadModel('Insti_map_Final.glb');
+        selectButton(document.getElementById('instiButton'));
+    });
 
     document.getElementById('gButton').addEventListener('click', () => {
         loadModel('G_floor_Final.glb');
