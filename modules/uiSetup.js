@@ -1,6 +1,4 @@
-import * as THREE from 'three';
-
-export function setupUI(loadModel) {
+export function setupUI(loadModel, toggleOrientation) {
 
     function selectButton(activeBtn) {
         const buttons = document.querySelectorAll('.ui-button');
@@ -27,4 +25,6 @@ export function setupUI(loadModel) {
         loadModel('2nd_floor_Final.glb');
         selectButton(document.getElementById('secondButton'));
     });
+
+    document.getElementById("orientButton").addEventListener("click", toggleOrientation);
 }
